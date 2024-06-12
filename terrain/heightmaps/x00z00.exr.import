@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://dx6y0dakhc4nc"
+path="res://.godot/imported/x00z00.exr-4484bc891b7c9044b45eff61bd2c794e.image"
+
+[deps]
+
+source_file="res://terrain/heightmaps/x00z00.exr"
+dest_files=["res://.godot/imported/x00z00.exr-4484bc891b7c9044b45eff61bd2c794e.image"]
+
+[params]
+

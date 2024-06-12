@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://dpcteuc0vfhq0"]
+
+[ext_resource type="PackedScene" uid="uid://bbm0p4s67e1w1" path="res://scenes/terrain_quad.tscn" id="1_g8ljq"]
+
+[node name="terrain_quads_strip" type="Node3D"]
+
+[node name="terrain_quad0" parent="." instance=ExtResource("1_g8ljq")]
+
+[node name="terrain_quad1" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, 0)
+
+[node name="terrain_quad2" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 64, 0, 0)

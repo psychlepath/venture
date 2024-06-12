@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3 uid="uid://d3md8vilkl0iv"]
+
+[ext_resource type="Script" path="res://scripts/terrain_section.gd" id="1_3gd6f"]
+[ext_resource type="PackedScene" uid="uid://dpcteuc0vfhq0" path="res://scenes/terrain_quads_strip.tscn" id="2_nqoh2"]
+
+[node name="terrain_section" type="Node3D"]
+script = ExtResource("1_3gd6f")
+
+[node name="terrain" type="Node3D" parent="."]
+
+[node name="quads_strip0" parent="terrain" instance=ExtResource("2_nqoh2")]
+
+[node name="quads_strip1" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 32)
+
+[node name="quads_strip2" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 64)
