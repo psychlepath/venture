@@ -15,3 +15,42 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 32)
 
 [node name="quads_strip2" parent="terrain" instance=ExtResource("2_nqoh2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 64)
+
+[node name="quads_strip3" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 96)
+
+[node name="quads_strip4" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 128)
+
+[node name="quads_strip5" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 160)
+
+[node name="quads_strip6" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 192)
+
+[node name="quads_strip7" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 224)
+
+[node name="quads_strip8" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 256)
+
+[node name="quads_strip9" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 288)
+
+[node name="quads_strip10" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 320)
+
+[node name="quads_strip11" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 352)
+
+[node name="quads_strip12" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 384)
+
+[node name="quads_strip13" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 416)
+
+[node name="quads_strip14" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 448)
+
+[node name="quads_strip15" parent="terrain" instance=ExtResource("2_nqoh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 480)

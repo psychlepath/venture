@@ -11,3 +11,42 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, 0)
 
 [node name="terrain_quad2" parent="." instance=ExtResource("1_g8ljq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 64, 0, 0)
+
+[node name="terrain_quad3" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 96, 0, 0)
+
+[node name="terrain_quad4" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 128, 0, 0)
+
+[node name="terrain_quad5" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 160, 0, 0)
+
+[node name="terrain_quad6" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 192, 0, 0)
+
+[node name="terrain_quad7" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 224, 0, 0)
+
+[node name="terrain_quad8" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 256, 0, 0)
+
+[node name="terrain_quad9" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 288, 0, 0)
+
+[node name="terrain_quad10" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 320, 0, 0)
+
+[node name="terrain_quad11" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 352, 0, 0)
+
+[node name="terrain_quad12" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 384, 0, 0)
+
+[node name="terrain_quad13" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 416, 0, 0)
+
+[node name="terrain_quad14" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 448, 0, 0)
+
+[node name="terrain_quad15" parent="." instance=ExtResource("1_g8ljq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 480, 0, 0)
