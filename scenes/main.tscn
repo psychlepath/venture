@@ -30,7 +30,7 @@ environment = SubResource("Environment_6a8uu")
 transform = Transform3D(0.802704, -0.268172, 0.532681, 0.0276023, 0.908944, 0.416003, -0.595738, -0.319224, 0.737016, 0, 3.2757, 0)
 
 [node name="player" parent="." instance=ExtResource("1_3k5he")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.0955, 62.2242, 44.2397)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60.3995, 44.517, 51.7763)
 
 [node name="terrain_manager" parent="." instance=ExtResource("2_iaelu")]
 

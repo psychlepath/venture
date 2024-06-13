@@ -11,8 +11,8 @@ class_name TerrainSection
 var quad_size : int = GlblScrpt.tile_size
 @onready var section_size : int = GlblScrpt.terrain_section_size
 @onready var terr_pos : Vector2 = Vector2(self.global_position.x, self.global_position.z)
-var terr_quad_x : int = floor(terr_pos.x / float(quad_size))# how many quads along the global X axis the terrain section is
-var terr_quad_z : int = floor(terr_pos.y / float(quad_size))# how many quads along the global Z axis the terrain section is
+var terr_quad_x : int = 0
+var terr_quad_z : int = 0
 var max_LOD_dist : int = 10
 var resource_file_name
 # given the player position, use a series of 32x32 quads
@@ -54,6 +54,8 @@ func _process(delta):
 			create_section_heights()
 
 func init_section():
+	terr_quad_x = floor(terr_pos.x / float(quad_size))# how many quads along the global X axis the terrain section is
+	terr_quad_z = floor(terr_pos.y / float(quad_size))# how many quads along the global Z axis the terrain section is
 	if section_data == null:
 		print("no section data file found")
 	else:
@@ -98,31 +100,31 @@ func check_quads(player_pos : Vector2):
 	#find the golbal coords of the quad in which the player is located
 	#var player_quad_x = floor(player_pos.x / quad_size) * quad_size
 	#var player_quad_z = floor(player_pos.y / quad_size) * quad_size
-	var player_quad_x : int = floor(player_pos.x / quad_size)# how many quads along the global X axis the player quad is
-	var player_quad_z : int = floor(player_pos.y / quad_size)# how many quads along the global Y axis the player quad is
+	var player_quad_x : int = floor(float(player_pos.x) / float(quad_size))# how many quads along the global X axis the player quad is
+	var player_quad_z : int = floor(float(player_pos.y) / float(quad_size))# how many quads along the global Y axis the player quad is
 	#TODO: a 512x512 terrain section that is far enough away can have a single LOD1 mesh and not show or check its 32x32 quads
-	if abs(player_quad_x - terr_quad_x) >= quad_size * 2 or abs(player_quad_z - terr_quad_z) >= quad_size * 2:
-		#set the quads to direction none and LOD5
-		for strip_z in range(0, num_quad_strips):
-			for quad_x in range(0, num_quads_in_strip): 
-				terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
-	else:
-		#check the direction and LOD level for each quad and 
-		#update the mesh if its current configuration does not match
-		for strip_z in range(0, num_quad_strips):
-			#var player_quad_dist_z : float = (terr_pos.y + float(strip_z)) - player_quad_z
-			var player_quad_dist_z : int = player_quad_z - terr_quad_z + strip_z # how many quads away the player is in the global Z direction
-			for quad_x in range(0, num_quads_in_strip): 
-				var player_quad_dist_x : int = player_quad_x - terr_quad_x + quad_x # how many quads away the player is in the global X direction
-				#first check if the current strip of quads is more than max LOD quads away from the quad
-				#in which the player is located
-				#if abs(player_quad_dist_z) >= max_LOD_dist:
-					##this quad is far enough from the player to have a "none" direction and a LOD of 5
-					#terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
-				#elif abs(player_quad_dist_x) >= max_LOD_dist:
-					##this quad is far enough from the player to have a "none" direction and a LOD of 5
-					#terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
-				#else:
-					#terrain.get_child(strip_z).get_child(quad_x).check_dir_and_LOD(Vector2i(player_quad_x, player_quad_z))
-				terrain.get_child(strip_z).get_child(quad_x).check_dir_and_LOD(Vector2i(player_quad_x, player_quad_z))	
+	#if abs(player_quad_x - terr_quad_x) >= (section_size / quad_size) or abs(player_quad_z - terr_quad_z) >= (section_size / quad_size):
+		##set the quads to direction none and LOD5
+		#for strip_z in range(0, num_quad_strips):
+			#for quad_x in range(0, num_quads_in_strip): 
+				#terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
+	#else:
+	#check the direction and LOD level for each quad and 
+	#update the mesh if its current configuration does not match
+	for strip_z in range(0, num_quad_strips):
+		#var player_quad_dist_z : float = (terr_pos.y + float(strip_z)) - player_quad_z
+		#var player_quad_dist_z : int = player_quad_z - terr_quad_z + strip_z # how many quads away the player is in the global Z direction
+		for quad_x in range(0, num_quads_in_strip): 
+			#var player_quad_dist_x : int = player_quad_x - terr_quad_x + quad_x # how many quads away the player is in the global X direction
+			#first check if the current strip of quads is more than max LOD quads away from the quad
+			#in which the player is located
+			#if abs(player_quad_dist_z) >= max_LOD_dist:
+				##this quad is far enough from the player to have a "none" direction and a LOD of 5
+				#terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
+			#elif abs(player_quad_dist_x) >= max_LOD_dist:
+				##this quad is far enough from the player to have a "none" direction and a LOD of 5
+				#terrain.get_child(strip_z).get_child(quad_x).set_dir_and_LOD(Vector2i(dirs.no_dir, LODs.LOD5))
+			#else:
+				#terrain.get_child(strip_z).get_child(quad_x).check_dir_and_LOD(Vector2i(player_quad_x, player_quad_z))
+			terrain.get_child(strip_z).get_child(quad_x).check_dir_and_LOD(Vector2i(player_quad_x, player_quad_z))	
 				
