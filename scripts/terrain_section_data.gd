@@ -6,3 +6,4 @@ class_name  TerrainSectionData
 #var section_position : Vector2
 #var height_data : PackedByteArray#should this be a PackedInt32Array?
 @export var height_data : PackedFloat32Array
+

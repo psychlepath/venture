@@ -1,6 +1,7 @@
-[gd_scene load_steps=4 format=3 uid="uid://ctkwhl4ngqpse"]
+[gd_scene load_steps=5 format=3 uid="uid://ctkwhl4ngqpse"]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_c870q"]
+[ext_resource type="PackedScene" uid="uid://cty8q53ix7du6" path="res://scenes/excavate_item.tscn" id="2_yywt0"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_7i31y"]
 radius = 0.3
@@ -58,6 +59,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.776471, 0.776471, 0.776471, 1)
+
+[node name="excavate_item" parent="camera_pivot" instance=ExtResource("2_yywt0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2.31736)
 
 [node name="mouse_tracker_l_r" type="Node3D" parent="."]
 

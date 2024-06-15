@@ -45,6 +45,8 @@ enum dirs {no_dir, N, NE, E, SE, S, SW, W, NW}
 # vertices will be added to the VERTICES array to create this quad's mesh
 var current_dir : int = -1
 var current_lod : int = -1
+var has_voxels : bool = false
+var quad_chunks_dict = {}#a quad-level dictionary to hold all of the chunk dictionaries
 
 func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist : int):
 	this_quad_x_pos = floor(self.global_position.x / float(quad_size))
@@ -69,6 +71,38 @@ func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist 
 #func set_dir_and_LOD(dir_and_lod : Vector2i):
 	#if current_dir != dir_and_lod.x or current_lod != dir_and_lod.y:
 		#create_quad_mesh(dir_and_lod)
+
+func handle_excavation(excavator_pos : Vector3) -> void:
+	#calculate the global position of the bottom left corner of the 8x8x8 voxel chunk
+	#(9x9x9 vertices) in which the excavator has collided with the terrain
+	var chunk_pos : Vector3 = get_chunk_pos(excavator_pos)
+	if !has_voxels: 
+		has_voxels = true
+		var new_chunk_dict = {}#a chunk-level dictionary that holds the vertices required to build the surface net
+		
+		
+	
+		
+	else:
+		#this quad already has voxels, check whether the excavation position is inside one of this
+		#quad's existing chunks
+		var chunk_key_string : String = "c" + str(chunk_pos.x) + str(chunk_pos.y) + str(chunk_pos.z)
+		var chunk_dict = quad_chunks_dict.get(chunk_key_string)
+		if chunk_dict != null:
+			#calculate the isosurface of this chunk and create a new surface
+			#that reflects the recent excavation
+			pass
+		
+func get_chunk_pos(excavator_pos : Vector3) -> Vector3:
+	var chunk_pos_x : float = excavator_pos.x - (float(this_quad_x_pos) * float(quad_size))
+	var x_dist = fmod(chunk_pos_x, float(GlblScrpt.chunk_size))
+	chunk_pos_x = chunk_pos_x - x_dist
+	var dist_y : float = fmod(excavator_pos.y, float(GlblScrpt.chunk_size))
+	var chunk_pos_y : float = excavator_pos.y - dist_y
+	var chunk_pos_z : float = excavator_pos.z - (float(this_quad_z_pos) * float(quad_size))
+	var dist_z = fmod(chunk_pos_z, float(GlblScrpt.chunk_size))
+	chunk_pos_z = chunk_pos_z - dist_z
+	return Vector3(chunk_pos_x, chunk_pos_y, chunk_pos_z)
 
 func check_dir_and_LOD(player_quad_pos: Vector2i):
 	var new_dir = null
