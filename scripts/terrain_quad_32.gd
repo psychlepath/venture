@@ -2,13 +2,19 @@
 extends Node3D
 class_name TerrainQuad32
 
-@onready var mesh_inst : MeshInstance3D = $MeshInstance3D
+@onready var mesh_inst = $MeshInstance3D
 @onready var coll_shape = $StaticBody3D/CollisionShape3D
-@onready var quad_size : int = GlblScrpt.tile_size
+@onready var chunk_parent = $chunks
+@onready var quad_size : int = GlblScrpt.quad_size
 @onready var section_size : int = GlblScrpt.terrain_section_size
+@onready var chunk_size : int = GlblScrpt.chunk_size
 @onready var quad_strip_length : int = section_size / quad_size
 @onready var this_quad_x_pos : int = 0
 @onready var this_quad_z_pos : int = 0
+@onready var chunk_child_scene : PackedScene
+
+
+var verts : PackedVector3Array = []
 var a_mesh : ArrayMesh
 var coll_shape_shape : ConcavePolygonShape3D
 var path_to_section_data = ""
@@ -46,9 +52,10 @@ enum dirs {no_dir, N, NE, E, SE, S, SW, W, NW}
 var current_dir : int = -1
 var current_lod : int = -1
 var has_voxels : bool = false
-var quad_chunks_dict = {}#a quad-level dictionary to hold all of the chunk dictionaries
+var chunks_positions = []
+var section_mat : ShaderMaterial
 
-func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist : int):
+func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist : int, _section_mat : ShaderMaterial):
 	this_quad_x_pos = floor(self.global_position.x / float(quad_size))
 	this_quad_z_pos = floor(self.global_position.z / float(quad_size))
 	quad_x = _quad_x
@@ -58,6 +65,7 @@ func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist 
 	starting_z = strip_z * quad_size * (section_size + 1)
 	# the x location of the top left corner of this quad inside the 513x513 parent
 	starting_x = quad_x * quad_size
+	section_mat = _section_mat
 	#create the mesh and the collisionshape at init 
 	#to avoid having to make each one unique in the editor
 	a_mesh = ArrayMesh.new()
@@ -73,36 +81,91 @@ func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist 
 		#create_quad_mesh(dir_and_lod)
 
 func handle_excavation(excavator_pos : Vector3) -> void:
-	#calculate the global position of the bottom left corner of the 8x8x8 voxel chunk
-	#(9x9x9 vertices) in which the excavator has collided with the terrain
-	var chunk_pos : Vector3 = get_chunk_pos(excavator_pos)
+	#if this quad is being excavated, convert its LOD0 to chunks
+	#var excavated_chunk_pos : Vector3 = get_chunk_pos(excavator_pos)
 	if !has_voxels: 
 		has_voxels = true
-		var new_chunk_dict = {}#a chunk-level dictionary that holds the vertices required to build the surface net
-		
+		#calculate the locations of the chunks that make up this terrain quad
+		#get the largest and smallest height in the quad's vertices
+		var quad_terr_heights = []
+		for height in range(0, verts.size()):
+			quad_terr_heights.append(verts[height].y)
+		quad_terr_heights.sort()
+		var lowest_chunk_y : int = floor(quad_terr_heights[0] / float(chunk_size))
+		var highest_chunk_y : int = floor(quad_terr_heights[quad_terr_heights.size() - 1] / float(chunk_size)) + 1
+		var num_slices_in_y = highest_chunk_y - lowest_chunk_y
+		var chunks_in_quad_size : int = quad_size / chunk_size
+		var is_north_edge_chunk : bool = false
+		var is_east_edge_chunk : bool = false
+		var is_south_edge_chunk : bool = false
+		var is_west_edge_chunk : bool = false
+		for chunk_y in range(0, num_slices_in_y):
+			for chunk_z in range(0, chunks_in_quad_size):
+				if chunk_z == chunks_in_quad_size - 1:
+					is_south_edge_chunk = true
+					is_north_edge_chunk = false					
+				elif chunk_z == 0:
+					is_north_edge_chunk = true
+					is_south_edge_chunk = false
+				else:
+					is_north_edge_chunk = false
+					is_south_edge_chunk = false
+				for chunk_x in range(0, chunks_in_quad_size):
+					if chunk_x == chunks_in_quad_size - 1:
+						is_east_edge_chunk = true
+						is_west_edge_chunk = false
+					elif chunk_x == 0:
+						is_west_edge_chunk = true
+						is_east_edge_chunk = false
+					else:
+						is_east_edge_chunk = false
+						is_west_edge_chunk = false
+					var chunk_surface_verts = []
+					for chunk_verts_z in range(0, chunk_size + 1):
+						for chunk_verts_x in range(0, chunk_size + 1):
+							var chunk_vert_index_z = (chunk_z * (quad_size + 1) * chunk_size) + (chunk_verts_z * quad_size + 1)
+							#TODO: guard against going out of bounds on the quad's verts array
+							var chunk_vert_index_x = (chunk_x * chunk_size) + chunk_verts_x 
+							var chunk_vert_index = chunk_vert_index_z + chunk_vert_index_x
+							chunk_surface_verts.append(verts[chunk_vert_index])
+					var chunk_surf_verts_sorted = chunk_surface_verts.duplicate(true)
+					chunk_surf_verts_sorted.sort()
+					#test to see whether the highest height of the current terrain vertices is below the chunk
+					var bottom_of_chunk : float = float((lowest_chunk_y * chunk_size) + (chunk_y * chunk_size)) #TODO: check whether this should be chunk_size + 1...
+					if chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1].y < bottom_of_chunk:
+						continue #chunk is in the air above the surface, no need to instantiate it 
+					var top_of_chunk : float = bottom_of_chunk + float(chunk_size)
+					if chunk_surf_verts_sorted[0].y > top_of_chunk: #TODO: should this be chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1] ??????
+						continue #chunk is below the surface, no need to instantiate it
+					#instantiate a terrain chunk at x and z offsets with a suitable y offset to represent the 
+					#heights of the terrain mesh at this location
+					var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
+					chunk_parent.add_child(new_chunk)
+					var chunk_pos = Vector3(self.global_position.x + float(chunk_x), float(bottom_of_chunk), self.global_positiion.z + float(chunk_z))
+					new_chunk.init_chunk(chunk_pos, is_north_edge_chunk, is_east_edge_chunk, is_south_edge_chunk, is_west_edge_chunk, quad_x, strip_z)
+					chunks_positions.append(chunk_pos)
+					#pass in the chunk array
+					#TODO: if this chunk is one that the player has just excavated, modify the 
+					#chunk array before passing it in
+					
+					#TODO pass in the terrain's excavation material/texture?
+					
+		#TODO: hide/disable the quad's mesh and collision
 		
 	
 		
-	else:
-		#this quad already has voxels, check whether the excavation position is inside one of this
-		#quad's existing chunks
-		var chunk_key_string : String = "c" + str(chunk_pos.x) + str(chunk_pos.y) + str(chunk_pos.z)
-		var chunk_dict = quad_chunks_dict.get(chunk_key_string)
-		if chunk_dict != null:
-			#calculate the isosurface of this chunk and create a new surface
-			#that reflects the recent excavation
-			pass
+	
 		
-func get_chunk_pos(excavator_pos : Vector3) -> Vector3:
-	var chunk_pos_x : float = excavator_pos.x - (float(this_quad_x_pos) * float(quad_size))
-	var x_dist = fmod(chunk_pos_x, float(GlblScrpt.chunk_size))
-	chunk_pos_x = chunk_pos_x - x_dist
-	var dist_y : float = fmod(excavator_pos.y, float(GlblScrpt.chunk_size))
-	var chunk_pos_y : float = excavator_pos.y - dist_y
-	var chunk_pos_z : float = excavator_pos.z - (float(this_quad_z_pos) * float(quad_size))
-	var dist_z = fmod(chunk_pos_z, float(GlblScrpt.chunk_size))
-	chunk_pos_z = chunk_pos_z - dist_z
-	return Vector3(chunk_pos_x, chunk_pos_y, chunk_pos_z)
+#func get_chunk_pos(excavator_pos : Vector3) -> Vector3:
+	#var chunk_pos_x : float = excavator_pos.x - (float(this_quad_x_pos) * float(quad_size))
+	#var x_dist = fmod(chunk_pos_x, float(GlblScrpt.chunk_size))
+	#chunk_pos_x = chunk_pos_x - x_dist
+	#var dist_y : float = fmod(excavator_pos.y, float(GlblScrpt.chunk_size))
+	#var chunk_pos_y : float = excavator_pos.y - dist_y
+	#var chunk_pos_z : float = excavator_pos.z - (float(this_quad_z_pos) * float(quad_size))
+	#var dist_z = fmod(chunk_pos_z, float(GlblScrpt.chunk_size))
+	#chunk_pos_z = chunk_pos_z - dist_z
+	#return Vector3(chunk_pos_x, chunk_pos_y, chunk_pos_z)
 
 func check_dir_and_LOD(player_quad_pos: Vector2i):
 	var new_dir = null
@@ -391,7 +454,7 @@ func create_quad_mesh(dir_and_lod : Vector2i):
 	
 	#populate the verts array with a 33x33 selection of the resource file's 513x513 height data,
 	#based on the strip_z and quad_x location of the quad
-	var verts : PackedVector3Array = []
+	verts.clear()
 	var indices : PackedInt32Array = []
 	var uvs : PackedVector2Array = []
 	var vert_selection : PackedInt32Array = []
@@ -528,7 +591,7 @@ func create_quad_mesh(dir_and_lod : Vector2i):
 					
 			#dirs.no_dir:				
 				#vert_y = resource_file.height_data[vert_y_in_array]
-		
+		#TODO: use voxels if this quad is at LOD1
 		verts.append(Vector3(vert_x_in_quad, vert_y, vert_z_in_quad))
 		#calculate the UVs of this vert, based on its location in the 513x513 grid
 		#should this be 512x512?
@@ -561,3 +624,15 @@ func create_quad_mesh(dir_and_lod : Vector2i):
 	#coll_shape.set_shape()
 	#mesh_inst.create_trimesh_collision()#useful for testing, but very slow
 
+func check_has_voxels() -> bool:
+	return has_voxels
+
+func get_chunk_at_position(_chunk_pos : Vector3):
+	var chunk = null
+	if chunks_positions.size() > 0:
+		for pos in range(0, chunks_positions.size()):
+			if chunks_positions[pos].y == _chunk_pos.y:
+				if chunks_positions[pos].x == _chunk_pos.x:
+					if chunks_positions[pos].z == _chunk_pos.z:
+						chunk = self.get_child(pos)
+	return chunk

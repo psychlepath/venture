@@ -6,7 +6,7 @@ var current_player_pos : Vector2 = Vector2(0.0, 0.0)
 var prev_player_pos : Vector2 = Vector2(0.0, 0.0)
 #var quadrant = ["ne", "se", "sw", "nw"]
 var terrain_section_size : int = 512#size in metres
-var tile_size : int = 32#the size of the terrain quads inside a terrain section
+var quad_size : int = 32#the size of the terrain quads inside a terrain section
 var chunk_size : int = 8#the size of the terrain voxel chunks in a quad
 var wind_manager : Node3D = null
 var water_manager : Node3D = null
@@ -192,9 +192,9 @@ func _process(_delta):
 		var should_update_terrain = false
 		current_player_pos.x = player.global_position.x
 		current_player_pos.y = player.global_position.z
-		if floor(current_player_pos.x / float(tile_size)) != floor(prev_player_pos.x / float(tile_size)):
+		if floor(current_player_pos.x / float(quad_size)) != floor(prev_player_pos.x / float(quad_size)):
 			should_update_terrain = true
-		if floor(current_player_pos.y / float(tile_size)) != floor(prev_player_pos.y / float(tile_size)):
+		if floor(current_player_pos.y / float(quad_size)) != floor(prev_player_pos.y / float(quad_size)):
 			should_update_terrain = true
 		if should_update_terrain:
 			#print("updating terrain - glblscrpt")
@@ -229,3 +229,4 @@ func _process(_delta):
 	#return "nw"
 	
 
+			

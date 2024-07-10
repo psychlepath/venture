@@ -8,11 +8,11 @@ class_name TerrainSection
 @onready var terrain : Node3D = $terrain
 @onready var num_quad_strips : int = terrain.get_child_count()
 @onready var num_quads_in_strip : int = terrain.get_child(0).get_child_count()
-var quad_size : int = GlblScrpt.tile_size
-@onready var section_size : int = GlblScrpt.terrain_section_size
+var quad_size : int
+var section_size : int
 @onready var terr_pos : Vector2 = Vector2(self.global_position.x, self.global_position.z)
-var terr_quad_x : int = 0
-var terr_quad_z : int = 0
+#var terr_sect_x : int = 0
+#var terr_sect_z : int = 0
 var max_LOD_dist : int = 10
 var resource_file_name
 # given the player position, use a series of 32x32 quads
@@ -45,7 +45,27 @@ enum dirs {no_dir, N, NE, E, SE, S, SW, W, NW}
 # TODO: keep an array of the quads' LODs and directions to check whether there is any
 # need to update the mesh
 
-
+func _ready():
+	quad_size = GlblScrpt.quad_size
+	section_size = GlblScrpt.terrain_section_size
+	if section_data == null:
+		print("no section data file found")
+	else:
+		resource_file_name = section_data.resource_path.get_file().trim_suffix('.tres')
+		init_quads()
+	
+	#TODO: remove the below before shipping
+	#TODO: put this into the _process function, as the terrain manager is not ready before its children,
+	#or move it to the terrain_manager for convenience 
+	if Engine.is_editor_hint():
+		#get the global positon of the centre of this section to store in the terrain_manager's 
+		#terrain_section_centres array
+		var centre_x : float = self.global_position.x + (float(section_size) / 2)
+		var centre_z : int = floor(self.global_position.z / float(section_size))
+		if GlblScrpt.terrain_manager != null:
+			GlblScrpt.terrain_manager.add_terrain_section_centre(Vector2(centre_x, centre_z))
+		else:
+			print("unable to add terrain section centre to terrain manager array")
 
 func _process(delta):
 	if Engine.is_editor_hint():
@@ -53,14 +73,10 @@ func _process(delta):
 			update_heights = false
 			create_section_heights()
 
-func init_section():
-	terr_quad_x = floor(terr_pos.x / float(quad_size))# how many quads along the global X axis the terrain section is
-	terr_quad_z = floor(terr_pos.y / float(quad_size))# how many quads along the global Z axis the terrain section is
-	if section_data == null:
-		print("no section data file found")
-	else:
-		resource_file_name = section_data.resource_path.get_file().trim_suffix('.tres')
-		init_quads()
+#func init_section():
+	#terr_sect_x = floor(terr_pos.x / float(quad_size))# how many quads along the global X axis the terrain section is
+	#terr_sect_z = floor(terr_pos.y / float(quad_size))# how many quads along the global Z axis the terrain section is
+	
 		
 #editor only function	
 func create_section_heights():
@@ -93,7 +109,7 @@ func init_quads():
 	for strip_z in range(0, num_quad_strips):
 		for quad_x in range(0, num_quads_in_strip): 
 			var path_to_resource
-			terrain.get_child(strip_z).get_child(quad_x).init_quad("res://terrain/" + resource_file_name + "/" + resource_file_name + ".tres", quad_x, strip_z, max_LOD_dist)
+			terrain.get_child(strip_z).get_child(quad_x).init_quad("res://terrain/" + resource_file_name + "/" + resource_file_name + ".tres", quad_x, strip_z, max_LOD_dist, section_mat)
 		
 
 func check_quads(player_pos : Vector2):
