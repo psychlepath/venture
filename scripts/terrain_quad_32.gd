@@ -95,31 +95,17 @@ func handle_excavation(excavator_pos : Vector3) -> void:
 		var highest_chunk_y : int = floor(quad_terr_heights[quad_terr_heights.size() - 1] / float(chunk_size)) + 1
 		var num_slices_in_y = highest_chunk_y - lowest_chunk_y
 		var chunks_in_quad_size : int = quad_size / chunk_size
-		var is_north_edge_chunk : bool = false
 		var is_east_edge_chunk : bool = false
 		var is_south_edge_chunk : bool = false
-		var is_west_edge_chunk : bool = false
 		for chunk_y in range(0, num_slices_in_y):
 			for chunk_z in range(0, chunks_in_quad_size):
+				is_south_edge_chunk = false
 				if chunk_z == chunks_in_quad_size - 1:
-					is_south_edge_chunk = true
-					is_north_edge_chunk = false					
-				elif chunk_z == 0:
-					is_north_edge_chunk = true
-					is_south_edge_chunk = false
-				else:
-					is_north_edge_chunk = false
-					is_south_edge_chunk = false
+					is_south_edge_chunk = true			
 				for chunk_x in range(0, chunks_in_quad_size):
+					is_east_edge_chunk = false
 					if chunk_x == chunks_in_quad_size - 1:
 						is_east_edge_chunk = true
-						is_west_edge_chunk = false
-					elif chunk_x == 0:
-						is_west_edge_chunk = true
-						is_east_edge_chunk = false
-					else:
-						is_east_edge_chunk = false
-						is_west_edge_chunk = false
 					var chunk_surface_verts = []
 					for chunk_verts_z in range(0, chunk_size + 1):
 						for chunk_verts_x in range(0, chunk_size + 1):
@@ -142,14 +128,12 @@ func handle_excavation(excavator_pos : Vector3) -> void:
 					var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
 					chunk_parent.add_child(new_chunk)
 					var chunk_pos = Vector3(self.global_position.x + float(chunk_x), float(bottom_of_chunk), self.global_positiion.z + float(chunk_z))
-					new_chunk.init_chunk(chunk_pos, is_north_edge_chunk, is_east_edge_chunk, is_south_edge_chunk, is_west_edge_chunk, quad_x, strip_z)
+					new_chunk.init_chunk(chunk_pos, is_east_edge_chunk, is_south_edge_chunk, quad_x, strip_z)
 					chunks_positions.append(chunk_pos)
-					#pass in the chunk array
-					#TODO: if this chunk is one that the player has just excavated, modify the 
-					#chunk array before passing it in
-					
-					#TODO pass in the terrain's excavation material/texture?
-					
+		
+		#once the chunks have been initialised, do another pass that updates and creates the mesh and collider of each chunk			
+		for chunk in range(0, chunk_parent.get_children().size()):
+			chunk_parent.get_child(chunk).update_chunk_cube_verts()
 		#TODO: hide/disable the quad's mesh and collision
 		
 	
