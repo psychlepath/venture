@@ -54,23 +54,16 @@ func _ready():
 		resource_file_name = section_data.resource_path.get_file().trim_suffix('.tres')
 		init_quads()
 	
-	#TODO: remove the below before shipping
-	#TODO: put this into the _process function, as the terrain manager is not ready before its children,
-	#or move it to the terrain_manager for convenience 
-	if Engine.is_editor_hint():
-		#get the global positon of the centre of this section to store in the terrain_manager's 
-		#terrain_section_centres array
-		var centre_x : float = self.global_position.x + (float(section_size) / 2)
-		var centre_z : int = floor(self.global_position.z / float(section_size))
-		if GlblScrpt.terrain_manager != null:
-			GlblScrpt.terrain_manager.add_terrain_section_centre(Vector2(centre_x, centre_z))
-		else:
-			print("unable to add terrain section centre to terrain manager array")
 
-func _process(delta):
+		
+
+
+func _process(_delta):
 	if Engine.is_editor_hint():
 		if update_heights == true:
 			update_heights = false
+			if GlblScrpt.terrain_manager != null:
+				GlblScrpt.terrain_manager.update_section_centres_array()
 			create_section_heights()
 
 #func init_section():
@@ -107,8 +100,7 @@ func init_quads():
 	#pass the resource file to the child quads 
 	#so that they can use it to find the resource file when they need it
 	for strip_z in range(0, num_quad_strips):
-		for quad_x in range(0, num_quads_in_strip): 
-			var path_to_resource
+		for quad_x in range(0, num_quads_in_strip):
 			terrain.get_child(strip_z).get_child(quad_x).init_quad("res://terrain/" + resource_file_name + "/" + resource_file_name + ".tres", quad_x, strip_z, max_LOD_dist, section_mat)
 		
 

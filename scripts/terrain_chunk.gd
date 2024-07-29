@@ -2,8 +2,12 @@ extends Node3D
 
 class_name TerrainChunk
 
+@onready var mesh_inst = $MeshInstance3D
+@onready var coll_shape = $StaticBody3D/CollisionShape3D
 @onready var chunk_size : int = GlblScrpt.chunk_size
 @onready var terrain_section_size : float = float(GlblScrpt.terrain_section_size)
+
+
 var chunk_height_verts = [
 	[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 	[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -139,97 +143,83 @@ var chunk_cube_verts = [
 		[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 	]
 ]
+var chunk_cube_verts_size : int = 0
+var cube_vert_offsets = [
+	Vector3i(0,0,0), Vector3i(1,0,0), Vector3i(1,0,1), Vector3i(0,0,1),
+	Vector3i(0,1,0), Vector3i(1,1,0), Vector3i(1,1,1), Vector3i(0,1,1)
+]
+var cube_edges = [
+	Vector2i(0,1), Vector2i(1,2), Vector2i(2,3), Vector2i(3,0),
+	Vector2i(4,5), Vector2i(5,6), Vector2i(6,7), Vector2i(7,4),
+	Vector2i(0,4), Vector2i(1,5), Vector2i(2,6), Vector2i(3,7)	
+]
+
+var verts_in_chunk : bool = false #Controls whether or not there is any need to create a mesh for this chunk
+var isosurface : float = 0.0
+var indices : PackedInt32Array = []
+#var chunk_edges_5_6_10 = []
+var placeholder_vector = Vector3(-1,-1,-1)#used to track whether or not an array index has been used 
+var placeholder_int : int = -2
+var placeholder_float : float = 2.0
+
+var a_mesh : ArrayMesh
+var coll_shape_shape : ConcavePolygonShape3D
 
 var chunk_pos : Vector3 = Vector3(0.0, 0.0, 0.0)
-var is_east_edge_chunk : bool = false
-var is_south_edge_chunk : bool = false
 var terrain_mat : ShaderMaterial
-enum dirs {N, E, SE, S, W}
-#is there a terrain section that contains a quad or a chunk to the North of this chunk?
+var terrain_section_index : int
+var chunk_location_in_terrain_section : Vector2i
+#identifiers for the terrain sections containing the neighbouring chunks
 var chunk_to_E_terr_sect_idx : int = -1
 var chunk_to_SE_terr_sect_idx : int = -1
 var chunk_to_S_terr_sect_idx : int = -1
-#is there a quad that contains a chunk to the north of this chunk?
+#handles to the parent quad of this chunk and the parent quads of neighbouring chunks
+var parent_quad = null
 var chunk_to_E_quad = null
 var chunk_to_SE_quad = null
 var chunk_to_S_quad = null
-#is there a chunk to the East, Southeast or South?
+#handles to neighbouring chunks
 var chunk_to_E = null
 var chunk_to_E_up = null
 var chunk_to_SE = null
 var chunk_to_SE_up = null
 var chunk_to_S = null
 var chunk_to_S_up = null
-#resource files
+var chunk_above = null
+#handles to the positions of the surrounding chunks
+var chunk_to_E_pos : Vector3
+var chunk_to_E_up_pos : Vector3
+var chunk_to_SE_pos : Vector3
+var chunk_to_SE_up_pos : Vector3
+var chunk_to_S_pos : Vector3
+var chunk_to_S_up_pos : Vector3
+var chunk_above_pos : Vector3
+#handles to resource files containing height and material data for this and neighbouring chunks
 var current_resource_file = null
 var this_resource_filename = null
 var resource_east_filename = null #does this need to be a global variable?
 var resource_southeast_filename = null #does this need to be a global variable?
 var resource_south_filename = null #does this need to be a global variable?
 
-var terrain_section_index : int
-var chunk_location_in_terrain_section : Vector2i
-
-
-func init_chunk(_chunk_pos : Vector3, _is_east_edge_chunk : bool, _is_south_edge_chunk : bool, parent_quad_x : int, parent_quad_z : int):
+func init_chunk(_chunk_pos : Vector3):
+	chunk_cube_verts_size = chunk_cube_verts.size()
+	coll_shape_shape = ConcavePolygonShape3D.new()
+	coll_shape.shape = coll_shape_shape
 	chunk_pos = _chunk_pos
 	self.global_position = chunk_pos
 	var chunk_x_in_section = fmod(chunk_pos.x, terrain_section_size)
 	var chunk_z_in_section = fmod(chunk_pos.z, terrain_section_size)
 	chunk_location_in_terrain_section = Vector2i(int(chunk_x_in_section), int(chunk_z_in_section))
-	is_east_edge_chunk = _is_east_edge_chunk
-	is_south_edge_chunk = _is_south_edge_chunk
-	
-		
-	#get handles to the surrounding chunks, quads, and terrain sections, as required.
-		
-	#East
-	var chunk_to_E_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z)
-	chunk_to_E_terr_sect_idx = get_terr_section_index(chunk_to_E_pos)
-	if chunk_to_E_terr_sect_idx != -1:
-		chunk_to_E_quad = get_quad(chunk_to_E_pos, chunk_to_E_terr_sect_idx)
-		if chunk_to_E_quad != null:
-			if chunk_to_E_quad.check_has_voxels() == true:
-				chunk_to_E = chunk_to_E_quad.get_chunk_at_position(chunk_to_E_pos)
-				
-	#East one level up
-	var chunk_to_E_up_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y + float(chunk_size), chunk_pos.z)
-	if chunk_to_E_quad != null:
-		if chunk_to_E_quad.check_has_voxels() == true:
-			chunk_to_E_up = chunk_to_E_quad.get_chunk_at_position(chunk_to_E_up_pos)
-				
-	#Southeast
-	var chunk_to_SE_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z + float(chunk_size))
-	chunk_to_SE_terr_sect_idx = get_terr_section_index(chunk_to_SE_pos)
-	if chunk_to_SE_terr_sect_idx != -1:
-		chunk_to_SE_quad = get_quad(chunk_to_SE_pos, chunk_to_SE_terr_sect_idx)
-		if chunk_to_SE_quad != null:
-			if chunk_to_SE_quad.check_has_voxels() == true:
-				chunk_to_SE = chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_pos)
-				
-	#Southeast one level up
-	var chunk_to_SE_up_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y + float(chunk_size), chunk_pos.z + float(chunk_size))
-	if chunk_to_SE_quad != null:
-		if chunk_to_SE_quad.check_has_voxels() == true:
-			chunk_to_SE_up = chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_up_pos)
-	
-	#South
-	var chunk_to_S_pos = Vector3(chunk_pos.x, chunk_pos.y, chunk_pos.z + float(chunk_size))
-	chunk_to_S_terr_sect_idx = get_terr_section_index(chunk_to_S_pos)
-	if chunk_to_S_terr_sect_idx != -1:
-		chunk_to_S_quad = get_quad(chunk_to_S_pos, chunk_to_S_terr_sect_idx)
-		if chunk_to_S_quad != null:
-			if chunk_to_S_quad.check_has_voxels() == true:
-				chunk_to_S = chunk_to_S_quad.get_chunk_at_position(chunk_to_S_pos)
-				
-	#South one level up
-	var chunk_to_S_up_pos = Vector3(chunk_pos.x, chunk_pos.y + float(chunk_size), chunk_pos.z + float(chunk_size))
-	if chunk_to_S_quad != null:
-		if chunk_to_S_quad.check_has_voxels() == true:
-			chunk_to_S_up = chunk_to_S_quad.get_chunk_at_position(chunk_to_S_up_pos)
-			
-
+	parent_quad = get_quad(chunk_pos, terrain_section_index)
+	chunk_to_E_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z)
+	chunk_to_E_up_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y + float(chunk_size), chunk_pos.z)
+	chunk_to_SE_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z + float(chunk_size))
+	chunk_to_SE_up_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y + float(chunk_size), chunk_pos.z + float(chunk_size))
+	chunk_to_S_pos = Vector3(chunk_pos.x, chunk_pos.y, chunk_pos.z + float(chunk_size))
+	chunk_to_S_up_pos = Vector3(chunk_pos.x, chunk_pos.y + float(chunk_size), chunk_pos.z + float(chunk_size))
+	chunk_above_pos = Vector3(chunk_pos.x, chunk_pos.y + float(chunk_size), chunk_pos.z)
 	#calculate which terrain section the chunk is in
+	terrain_section_index = get_terr_section_index(chunk_pos)
 	#this allows the chunk to find the right resource file to access the heights data needed to
 	#populate the chunk_cube_verts array
 	this_resource_filename = get_section_resource_filename(chunk_pos)
@@ -242,7 +232,7 @@ func init_chunk(_chunk_pos : Vector3, _is_east_edge_chunk : bool, _is_south_edge
 	#get the first 9x9 verts representing the heightmap heights for this chunk
 	for height_z in range(0, chunk_size + 1):
 		for height_x in range(0, chunk_size + 1):
-			var height_offset_z : int = (chunk_location_in_terrain_section.y + height_z) * (terrain_section_size + 1)
+			var height_offset_z : int = floor((chunk_location_in_terrain_section.y + height_z) * (terrain_section_size + 1))
 			var height_offset_x : int = chunk_location_in_terrain_section.x + height_x
 			chunk_height_verts[height_z][height_x] = current_resource_file.height_data[height_offset_z + height_offset_x]
 		#insert placeholder heights in the last column in case there is no neighbouring chunk to the East 
@@ -250,81 +240,22 @@ func init_chunk(_chunk_pos : Vector3, _is_east_edge_chunk : bool, _is_south_edge
 	#insert placeholder heights in the last row in case there is no neighbouring chunk to the South
 	for s_heights in range(0, chunk_size + 2):
 		chunk_height_verts[chunk_size + 1][s_heights] = chunk_height_verts[chunk_size][s_heights]
-		
-	#insert placeholder heights in the last cell of the last column in case there is no neighbouring chunk to the Southeast
-	#chunk_height_verts[chunk_size + 1][chunk_size + 1] = chunk_height_verts[chunk_size][chunk_size + 1]
-	
-	update_initial_chunk_heights()
-	
-	init_chunk_cube_verts()
-			
-		
-		#path_to_section_data = "res://terrain/" + resource_east_filename + "/" + resource_east_filename + ".tres"
-		#for height_east in range(0, chunk_size + 1):
-			#var height_offset_z : int = (chunk_location_in_terrain_section.y + height_east) * (GlblScrpt.terrain_section_size + 1)
-			#var height_offset_x : int = chunk_location_in_terrain_section.x + 1 # get the 1th column of heights in the neighbouring chunk to the East
-			#chunk_height_verts[height_east][chunk_size + 1] = current_resource_file.height_data[height_offset_z + height_offset_x]
-	
-	
-	
-	#fill the vertical slices of the arrays representing the corners of the voxel cubes
-		
-		
-		#check whether the quad to the East has chunks
-		#quad_to_east = self.get_parent().get_child(parent_quad_x + 1)
-		#if quad_to_east.check_has_voxels() == true:
-			##find the neighbouring voxel chunk to the East and also East up
-			#chunk_to_east = quad_to_east
-			
-		
-		
-		
-		
-		
-		#find the terrain section index in the terrrain_manager's terrain_section_centres array from the chunk's global position
-		#terrain_section_index = get_terr_section_index(chunk_pos)
-	
-	
-	#for cube_y in range(0, chunk_array.size()):
-		#for cube_z in range(0, chunk_array.size()):
-			#for cube_x in range(0, chunk_array.size()):
-				#var z_in_chunk_surf_verts = cube_z * (chunk_array.size() + 1)
-				#if bottom_of_chunk + cube_y <= chunk_surface_verts[z_in_chunk_surf_verts + cube_x].y:
-					#chunk_array[cube_y][cube_z][cube_x] = 1.0
-	#create_chunk_mesh()
+
 
 func handle_excavation(excavator_pos : Vector3, excavator_size : float) -> void:
 	#TODO: allow for different shapes...
 	#calculate the effect on the chunk_cube_verts array of the excavator's shape
 	if chunk_cube_verts != null:
-		for chunk_y in range(0, chunk_cube_verts.size()):
-			for chunk_z in range(0, chunk_cube_verts.size()):
-				for chunk_x in range(0, chunk_cube_verts.size()):
+		for vert_y in range(0, chunk_cube_verts_size):
+			for vert_z in range(0, chunk_cube_verts_size):
+				for vert_x in range(0, chunk_cube_verts_size):
 					#is this cube vertex inside the excavator shape?
-					var vertex_global_pos = Vector3(self.global_position.x + float(chunk_x), self.global_position.y + float(chunk_y), self.global_position.z + float(chunk_z))
-					if vertex_global_pos.distance_squared_to(excavator_pos) < excavator_size * excavator_size:
-						chunk_cube_verts[chunk_y][chunk_z][chunk_x] = 1.0
+					var vertex_global_pos = Vector3(chunk_pos.x + float(vert_x), chunk_pos.y + float(vert_y), chunk_pos.z + float(vert_z))
+					if vertex_global_pos.distance_to(excavator_pos) < excavator_size:
+						chunk_cube_verts[vert_y][vert_z][vert_x] = 1.0
+	#TODO: update the data relating to the neighbouring chunks to East, Southeast, South and above
+	update_chunk_cube_verts()
 	create_chunk_mesh()
-
-func create_chunk_mesh():
-	
-	pass
-	
-	#var x_string = ""
-	#if x_pos > 9 or x_pos < -9:
-		#x_string = "x" + str(x_pos)
-	#elif x_pos < 0 and x_pos > -10:
-		#x_string = "x-0" + str(x_pos)
-	#else:
-		#x_string = "x0" + str(x_pos)
-	#var z_string = ""
-	#if z_pos > 9 or z_pos < -9:
-		#z_string = "z" + str(z_pos)
-	#elif z_pos < 0 and z_pos > -10:
-		#z_string = "z-0" + str(z_pos)
-	#else:
-		#z_string = "z0" + str(z_pos)
-	#GlblScrpt.add_terrain_section_position(x_string + z_string)
 
 #calculate the filename of the resource containing the terrain section's height data etc.
 func get_section_resource_filename(_chunk_pos : Vector3) -> String:
@@ -364,10 +295,51 @@ func get_quad(_chunk_pos, _terr_sect_idx):
 		current_quad = GlblScrpt.terrain_manager.get_child(_terr_sect_idx).terrain.get_child(quad_z).get_child(quad_x)
 	return current_quad
 
-
-
 #replace the placeholder values on the East, Southeast and South edges of the chunk_height_verts array
 func update_initial_chunk_heights():
+	#get handles to the surrounding chunks, quads, and terrain sections, as required.
+	#East
+	chunk_to_E_terr_sect_idx = get_terr_section_index(chunk_to_E_pos)
+	if chunk_to_E_terr_sect_idx != -1:
+		chunk_to_E_quad = get_quad(chunk_to_E_pos, chunk_to_E_terr_sect_idx)
+		if chunk_to_E_quad != null:
+			if chunk_to_E_quad.check_has_voxels() == true:
+				chunk_to_E = chunk_to_E_quad.get_chunk_at_position(chunk_to_E_pos)
+				
+	#East one level up
+	if chunk_to_E_quad != null:
+		if chunk_to_E_quad.check_has_voxels() == true:
+			chunk_to_E_up = chunk_to_E_quad.get_chunk_at_position(chunk_to_E_up_pos)
+				
+	#Southeast
+	chunk_to_SE_terr_sect_idx = get_terr_section_index(chunk_to_SE_pos)
+	if chunk_to_SE_terr_sect_idx != -1:
+		chunk_to_SE_quad = get_quad(chunk_to_SE_pos, chunk_to_SE_terr_sect_idx)
+		if chunk_to_SE_quad != null:
+			if chunk_to_SE_quad.check_has_voxels() == true:
+				chunk_to_SE = chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_pos)
+				
+	#Southeast one level up
+	if chunk_to_SE_quad != null:
+		if chunk_to_SE_quad.check_has_voxels() == true:
+			chunk_to_SE_up = chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_up_pos)
+	
+	#South
+	chunk_to_S_terr_sect_idx = get_terr_section_index(chunk_to_S_pos)
+	if chunk_to_S_terr_sect_idx != -1:
+		chunk_to_S_quad = get_quad(chunk_to_S_pos, chunk_to_S_terr_sect_idx)
+		if chunk_to_S_quad != null:
+			if chunk_to_S_quad.check_has_voxels() == true:
+				chunk_to_S = chunk_to_S_quad.get_chunk_at_position(chunk_to_S_pos)
+				
+	#South one level up
+	if chunk_to_S_quad != null:
+		if chunk_to_S_quad.check_has_voxels() == true:
+			chunk_to_S_up = chunk_to_S_quad.get_chunk_at_position(chunk_to_S_up_pos)
+	
+	#the chunk directly above this chunk
+	chunk_above = parent_quad.get_chunk_at_position(chunk_above_pos)
+	
 	var path_to_section_data : String = ""
 	var resource_file = null
 	#start with the heights to the East
@@ -377,7 +349,6 @@ func update_initial_chunk_heights():
 		path_to_section_data = "res://terrain/" + resource_east_filename + "/" + resource_east_filename + ".tres"
 		resource_file = load(path_to_section_data)
 		if resource_file != null:
-			var chunk_to_E_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z)
 			for e_height in range(0, chunk_size + 1):
 				var height_z : int = int(fmod(chunk_to_E_pos.z + float(e_height), terrain_section_size) * (terrain_section_size + 1.0))
 				var height_x : int = 1
@@ -391,7 +362,6 @@ func update_initial_chunk_heights():
 		path_to_section_data = "res://terrain/" + resource_southeast_filename + "/" + resource_southeast_filename + ".tres"
 		resource_file = load(path_to_section_data)
 		if resource_file != null:
-			var chunk_to_SE_pos = Vector3(chunk_pos.x + float(chunk_size), chunk_pos.y, chunk_pos.z + float(chunk_size))
 			var height_z : int = int(fmod(chunk_to_SE_pos.z + 1.0, terrain_section_size) * (terrain_section_size + 1.0))
 			var height_x : int = 1
 			chunk_height_verts[chunk_size + 1][chunk_size + 1] = resource_file.height_data[height_z + height_x]
@@ -404,20 +374,720 @@ func update_initial_chunk_heights():
 		path_to_section_data = "res://terrain/" + resource_south_filename + "/" + resource_south_filename + ".tres"
 		resource_file = load(path_to_section_data)
 		if resource_file != null:
-			var chunk_to_S_pos = Vector3(chunk_pos.x, chunk_pos.y, chunk_pos.z  + float(chunk_size))
 			var height_z : int = int(fmod(chunk_to_S_pos.z + 1.0, terrain_section_size) * (terrain_section_size + 1.0))
 			for s_height in range(0, chunk_size + 1):
 				chunk_height_verts[chunk_size + 1][s_height] = resource_file.height_data[height_z + s_height]
 		resource_file = null
+	init_chunk_cube_verts()
 		
-#assign a "0" or a "1" to each vertex of each voxel cube, depending on whether it is in the air or in the ground
+#assign a "1" or a "0" to each vertex of each voxel cube, depending on whether it is in the air or in the ground
+#TODO: make sure that the 1 is in the air and the 0 is in the ground.
 func init_chunk_cube_verts():
-	for cube_y in range(0, chunk_cube_verts.size()):
-		for cube_z in range(0, chunk_cube_verts.size()):
-			for cube_x in range(0, chunk_cube_verts.size()):
-				if chunk_pos.y + float(cube_y) > chunk_height_verts[cube_z][cube_x]:
+	for cube_y in range(0, chunk_cube_verts_size):
+		for cube_z in range(0, chunk_cube_verts_size):
+			for cube_x in range(0, chunk_cube_verts_size):
+				if chunk_pos.y + float(cube_y) <= chunk_height_verts[cube_z][cube_x]:
 					chunk_cube_verts[cube_y][cube_z][cube_x] = 0
 				else:
 					chunk_cube_verts[cube_y][cube_z][cube_x] = 1
+	create_chunk_mesh()
 
-				
+#check to East, Southeast, South and one level up to make sure that the chunk cube verts array is up to date
+func update_chunk_cube_verts():
+	var neighbouring_cube_verts = []
+	var chunk_found : bool = false
+	var resource_file
+	#check for the chunk to the East and East one level up
+	if chunk_to_E_terr_sect_idx != -1:
+		if chunk_to_E_quad != null:
+			if chunk_to_E_quad.has_voxels() == true:
+				if chunk_to_E == null:
+					chunk_to_E_quad.get_chunk_at_position(chunk_to_E_pos)
+				if chunk_to_E != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_E.get_western_cube_verts()
+					# insert these ones and zeroes into the chunk cube verts array
+					for vert_y in range(0, chunk_cube_verts_size):
+						for vert_z in range(0, chunk_cube_verts_size):
+							chunk_cube_verts[vert_y][vert_z][chunk_cube_verts_size - 1] = neighbouring_cube_verts[(vert_y * chunk_cube_verts_size) + vert_z]
+				#check for the chunk to the East and one level up
+				neighbouring_cube_verts.clear()
+				if chunk_to_E_up == null:
+					chunk_to_E_quad.get_chunk_at_position(chunk_to_E_up_pos)
+				if chunk_to_E_up != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_E_up.get_western_cube_verts_down()
+					# insert these ones and zeroes into the chunk cube verts array
+					for vert_z in range(0, chunk_cube_verts_size):
+						chunk_cube_verts[chunk_cube_verts_size - 1][vert_z][chunk_cube_verts_size - 1] = neighbouring_cube_verts[vert_z]
+		#if there is no voxel cube data for the chunk to the East, use the heights instead. 
+		if chunk_found == false and chunk_to_E_terr_sect_idx != -1:
+			resource_file = load("res://terrain/" + resource_east_filename + "/" + resource_east_filename + ".tres")
+			for e_height in range(0, chunk_size + 1):
+				var height_z : int = int(fmod(chunk_to_E_pos.z + float(e_height), terrain_section_size) * (terrain_section_size + 1.0))
+				var height_x : int = 1
+				chunk_height_verts[e_height][chunk_size + 1] = resource_file.height_data[height_z + height_x]
+			#TODO: kludge what happens when this chunk is excavated near its border with the chunk to the East...
+			#update the ones and zeroes in the eastern slice of the cube verts array with reference to the height data of the chunk to the East's terrain_section resource file
+			for vert_y in range(0, chunk_cube_verts_size):
+				for vert_z in range(0, chunk_cube_verts_size):
+					if chunk_pos.y + float(vert_y) > chunk_height_verts[vert_y][vert_z][chunk_cube_verts_size - 1]:
+						chunk_cube_verts[vert_y][vert_z][chunk_cube_verts_size - 1] = 1
+					else:
+						chunk_cube_verts[vert_y][vert_z][chunk_cube_verts_size - 1] = 0	
+	
+	
+	#check for the chunk to the Southeast and Southeast one level up
+	neighbouring_cube_verts.clear()
+	resource_file = null
+	chunk_found = false
+	if chunk_to_SE_terr_sect_idx != -1:
+		if chunk_to_SE_quad != null:
+			if chunk_to_SE_quad.has_voxels() == true:
+				if chunk_to_SE == null:
+					chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_pos)
+				if chunk_to_SE != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_SE.get_northwestern_cube_verts()
+					# insert these ones and zeroes into the chunk cube verts array
+					for vert_y in range(0, chunk_cube_verts_size):
+						chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][chunk_cube_verts_size - 1] = neighbouring_cube_verts[vert_y]
+				#check for the chunk to the Southeast and one level up
+				neighbouring_cube_verts.clear()
+				if chunk_to_SE_up == null:
+					chunk_to_SE_quad.get_chunk_at_position(chunk_to_SE_up_pos)
+				if chunk_to_SE_up != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_SE_up.get_northwestern_cube_verts_down()
+					# insert this one or zero into the chunk cube verts array
+					chunk_cube_verts[chunk_cube_verts_size - 1][chunk_cube_verts_size - 1][chunk_cube_verts_size - 1] = neighbouring_cube_verts[0]
+		#if there is no voxel cube data for the chunk to the Southeast, use the heights instead. 
+		if chunk_found == false and chunk_to_SE_terr_sect_idx != -1:
+			resource_file = load("res://terrain/" + resource_southeast_filename + "/" + resource_southeast_filename + ".tres")
+			for s_height in range(0, chunk_size + 1):
+				var height_z : int = int(fmod(chunk_to_S_pos.z + float(chunk_size + 1), terrain_section_size) * (terrain_section_size + 1.0))
+				chunk_height_verts[chunk_size + 1][s_height] = resource_file.height_data[height_z + s_height]
+			#TODO: kludge what happens when this chunk is excavated near its border with the chunk to the South...
+			#update the ones and zeroes in the Southern slice of the cube verts array with reference to the height data of the chunk to the South's terrain_section resource file
+			for vert_y in range(0, chunk_cube_verts_size):
+				for vert_x in range(0, chunk_cube_verts_size):
+					if chunk_pos.y + float(vert_y) > chunk_height_verts[vert_y][chunk_cube_verts_size - 1][vert_x]:
+						chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][vert_x] = 1
+					else:
+						chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][vert_x] = 0	
+	
+	#check for the chunk to the South and South one level up
+	neighbouring_cube_verts.clear()
+	resource_file = null
+	chunk_found = false
+	if chunk_to_S_terr_sect_idx != -1:
+		if chunk_to_S_quad != null:
+			if chunk_to_S_quad.has_voxels() == true:
+				if chunk_to_S == null:
+					chunk_to_S_quad.get_chunk_at_position(chunk_to_S_pos)
+				if chunk_to_S != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_S.get_northern_cube_verts()
+					# insert these ones and zeroes into the chunk cube verts array
+					for vert_y in range(0, chunk_cube_verts_size):
+						for vert_x in range(0, chunk_cube_verts_size):
+							chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][vert_x] = neighbouring_cube_verts[(vert_y * chunk_cube_verts_size) + vert_x]
+				#check for the chunk to the South and one level up
+				neighbouring_cube_verts.clear()
+				if chunk_to_S_up == null:
+					chunk_to_S_quad.get_chunk_at_position(chunk_to_S_up_pos)
+				if chunk_to_S_up != null:
+					chunk_found = true
+					neighbouring_cube_verts = chunk_to_S_up.get_northern_cube_verts_down()
+					# insert these ones and zeroes into the chunk cube verts array
+					for vert_x in range(0, chunk_cube_verts_size):
+						chunk_cube_verts[chunk_cube_verts_size - 1][chunk_cube_verts_size - 1][vert_x] = neighbouring_cube_verts[vert_x]
+		#if there is no voxel cube data for the chunk to the South, use the heights instead. 
+		if chunk_found == false and chunk_to_S_terr_sect_idx != -1:
+			resource_file = load("res://terrain/" + resource_south_filename + "/" + resource_south_filename + ".tres")
+			for s_height in range(0, chunk_size + 1):
+				var height_z : int = int(fmod(chunk_to_S_pos.z + float(chunk_size + 1), terrain_section_size) * (terrain_section_size + 1.0))
+				chunk_height_verts[chunk_size + 1][s_height] = resource_file.height_data[height_z + s_height]
+			#TODO: kludge what happens when this chunk is excavated near its border with the chunk to the South...
+			#update the ones and zeroes in the Southern slice of the cube verts array with reference to the height data of the chunk to the South's terrain_section resource file
+			for vert_y in range(0, chunk_cube_verts_size):
+				for vert_x in range(0, chunk_cube_verts_size):
+					if chunk_pos.y + float(vert_y) > chunk_height_verts[vert_y][chunk_cube_verts_size - 1][vert_x]:
+						chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][vert_x] = 1
+					else:
+						chunk_cube_verts[vert_y][chunk_cube_verts_size - 1][vert_x] = 0	
+	
+	#check for the chunk one level up
+	neighbouring_cube_verts.clear()
+	resource_file = null
+	chunk_found = false
+	if chunk_above == null:
+		parent_quad.get_chunk_at_position(chunk_above_pos)
+	if chunk_above != null:
+		neighbouring_cube_verts = chunk_above.get_bottom_verts()
+		# insert these ones and zeroes into the chunk cube verts array
+		for vert_z in range(0, chunk_cube_verts_size):
+			for vert_x in range(0, chunk_cube_verts_size):
+				chunk_cube_verts[chunk_cube_verts_size - 1][vert_z][vert_x] = neighbouring_cube_verts[vert_z * chunk_cube_verts_size + vert_x]
+	
+			
+func create_chunk_mesh():
+	var edges_5_6_10 = [
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[	
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		],
+		[
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)],
+			[Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2), Vector3i(-2,-2,-2)]
+		]
+	]
+	var voxel_inidces = [
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		],
+		[
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2],
+			[-2,-2,-2,-2,-2,-2,-2,-2,-2]
+		]
+	]
+	var verts : PackedVector3Array = []
+	var uvs : PackedVector2Array = []
+	var current_index = 0
+	#iterate over each of the voxel cubes in the chunk
+	var vert_in_chunk : bool = false
+	for voxel_y in range(0, chunk_cube_verts_size -1):
+		for voxel_z in range(0, chunk_cube_verts_size - 1):
+			for voxel_x in range(0, chunk_cube_verts_size - 1):
+				var voxel_verts_in_chunk = []#keep track of the one or zero associated with each of the cube's 8 vertices
+				var voxel_verts_global_positions = []
+				#find the location of the voxel's origin inside the chunk
+				var voxel_origin_in_chunk : Vector3i = Vector3i(voxel_x, voxel_y, voxel_z)
+				#find the global location of the voxel's origin
+				var voxel_origin_global : Vector3 = Vector3(chunk_pos.x + float(voxel_x), chunk_pos.y + float(voxel_y), chunk_pos.z + float (voxel_z))
+				#store the chunk-relative locations of all 8 of the voxel's vertices
+				for offset in range(0, cube_vert_offsets.size()):
+					voxel_verts_in_chunk.append(voxel_origin_in_chunk + cube_vert_offsets[offset])
+					voxel_verts_global_positions.append(voxel_origin_global + Vector3(float(cube_vert_offsets[offset].x), float(cube_vert_offsets[offset].y), float(cube_vert_offsets[offset].z)))
+				#check whether any of the voxel's edges is intersected by the isosurface
+				var intersect_positions = []
+				#if an intersection does occur, keep track of the direction in which the edge crosses the isosurface. This information will be used later for tri winding and normals.
+				var intersect_directions = []
+				#var cube_edges_5_6_10 = Vector3i(0,0,0)
+				for edge in range(0, cube_edges.size()):
+					#get the first and second vertices of each edge
+					var edge_vert0_in_chunk = voxel_verts_in_chunk[cube_edges[edge].x]
+					var edge_vert1_in_chunk = voxel_verts_in_chunk[cube_edges[edge].y]
+					#if both edge vertices are on the same side of the isosurface (i.e both are zero or both are one)
+					if edge_vert0_in_chunk == edge_vert1_in_chunk:
+						#intersect_positions.append(Vector3(0.0,0.0,0.0))#using non-intersected edges skews the averaging calculation?
+						intersect_directions.append(placeholder_int)
+						continue
+					else:
+						if edge_vert0_in_chunk < edge_vert1_in_chunk:
+							#the edge goes from ground at its first vertex to air at its second vertex
+							#TODO: double-check that this is the correct way to mark air and ground, not the other way around
+							intersect_directions.append(1)
+						else:
+							#the edge goes from ground at its first vertex to air at its second vertex
+							intersect_directions.append(-1)
+						var edge_vert01_global_pos = voxel_verts_global_positions[cube_edges[edge].x]
+						var edge_vert02_global_pos = voxel_verts_global_positions[cube_edges[edge].y]
+						var current_intersect_pos_x = (edge_vert01_global_pos.x + edge_vert02_global_pos.x) / 2.0
+						var current_intersect_pos_y = (edge_vert01_global_pos.y + edge_vert02_global_pos.y) / 2.0
+						var current_intersect_pos_z = (edge_vert01_global_pos.z + edge_vert02_global_pos.z) / 2.0
+						intersect_positions.append(Vector3(current_intersect_pos_x, current_intersect_pos_y, current_intersect_pos_z))
+				#store the directions of the intersections through edges 5, 6 and 10 to calculate tri winding and normals later
+				edges_5_6_10[voxel_y][voxel_z][voxel_x] = Vector3i(intersect_directions[5], intersect_directions[6], intersect_directions[10])
+						
+				#if one or more edges of this voxel are intersected by the isosurface
+				if intersect_positions.size() > 0:
+					vert_in_chunk = true#TODO: flag the voxel in some way for later iteration?
+					
+					#find the mesh vertex position within the voxel by getting an average of the intersection points
+					var intersection_points_x = 0
+					var intersection_points_y = 0
+					var intersection_points_z = 0
+					for pt in range(0, intersect_positions.size()):
+						intersection_points_x = intersection_points_x + intersect_positions[pt].x
+						intersection_points_y = intersection_points_y + intersect_positions[pt].y
+						intersection_points_z = intersection_points_z + intersect_positions[pt].z
+					intersection_points_x = intersection_points_x / intersect_positions.size()
+					intersection_points_y = intersection_points_y / intersect_positions.size()
+					intersection_points_z = intersection_points_z / intersect_positions.size()
+					#add the vertex to the mesh vertices array
+					verts.append(Vector3(intersection_points_x, intersection_points_y, intersection_points_z))
+					#calculate the uv offsets for this vertex based on its XZ position inside the terrain section
+					var uv_x = fmod(intersection_points_x, terrain_section_size) / terrain_section_size
+					var uv_y = fmod(intersection_points_z, terrain_section_size) / terrain_section_size
+					uvs.append(Vector2(uv_x, uv_y))
+					#add the index to the voxel indices array for triangulation calculations later
+					voxel_inidces[voxel_y][voxel_z][voxel_x] = current_index
+					current_index = current_index + 1
+	
+	if vert_in_chunk == true:
+		create_indices(voxel_inidces, edges_5_6_10)
+		var st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.set_material(terrain_mat)
+		#TODO: set smooth normals
+		st.set_smooth_group(0)
+		for vert in range(0, verts.size()):
+			st.set_uv(uvs[vert])
+			st.add_vertex(verts[vert])
+		for ind in range(0,indices.size()):
+			st.add_index(ind)
+		st.generate_normals()
+		a_mesh = ArrayMesh.new()
+		st.commit(a_mesh)
+		mesh_inst.mesh = a_mesh
+		coll_shape_shape.set_faces(a_mesh.get_faces())
+		
+func create_indices(voxel_indices, edges_5_6_10):
+	#quads are built only in the X+, Y+ and Z+ directions from each voxel vertex.
+	#Therefore, only edges 5, 6 and 10 need to be taken into account
+	#calculate the winding of the tris, ideally in a LOD-friendly manner
+	#---------
+	#| \ | / |
+	#---------
+	#| / | \ |
+	#_________  
+	indices.clear()
+	for vox_y in range(0, chunk_size):
+		for vox_z in range(0, chunk_size):
+			for vox_x in range(0, chunk_size):
+				#if this voxel contains a mesh vertex
+				if voxel_indices[vox_y][vox_z][vox_x] != placeholder_int:
+					var tri_type01 = true #there are two ways of constructing a given tri, depending on its location in the quad. |\ or \|
+					#check whether edges 5,6 and 10 are intersected by the isosurface and in which direction
+					var edge_5 = edges_5_6_10[vox_y][vox_z][vox_x].x
+					var edge_6 = edges_5_6_10[vox_y][vox_z][vox_x].y
+					var edge_10 = edges_5_6_10[vox_y][vox_z][vox_x].z
+					#if edge 5 is intersected
+					if edge_5 != placeholder_int:
+						#the vertex in this voxel will make a quad with the vertices in the following voxels: (X+1,Y+0,Z+0), (X+0,Y+1,Z+0), (X+1,Y+1,Z+0)
+						#calculate which way the triangles should be wound on horizontal quads facing in the X+ or X- directions
+						tri_type01 = true
+						#if this is an even-numbered slice
+						if vox_y % 2 == 0:
+							#if this is an odd-numbered cell
+							if vox_x % 2 != 0:
+								tri_type01 = false
+						#this is an odd-numbered slice
+						else:
+							#if this is an even-numbered cell
+								if vox_x % 2 == 0:
+									tri_type01 = false
+						#if the isosurface is facing in the direction from edge 5's vertex 0 towards edge 5's vertex 1
+						if edge_5 == 1:
+							if tri_type01 == true:
+								if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int and voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+									#tri 1
+									indices.append(voxel_indices[vox_y][vox_z][vox_x])
+									indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+									if voxel_indices[vox_y+1][vox_z][vox_x+1] != placeholder_int:
+										#tri2 
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+							else:
+								if voxel_indices[vox_y+1][vox_z][vox_x+1] != placeholder_int:
+									if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+										#tri 1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+									if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										
+						#if the isosurface is facing in the direction from edge 5's vertex 1 towards edge 5's vertex 0
+						if edge_5 == -1:
+							if tri_type01 == true:
+								if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int and voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+									#tri 1
+									indices.append(voxel_indices[vox_y][vox_z][vox_x])
+									indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+									indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									if voxel_indices[vox_y+1][vox_z][vox_x+1] != placeholder_int:
+										#tri2 
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+							else:
+								if voxel_indices[vox_y+1][vox_z][vox_x+1] != placeholder_int:
+									if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+										#tri 1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x+1])
+										
+					if edge_6 != placeholder_int:
+						#the vertex in this voxel will make a quad with the vertices in the following voxels: (X+0,Y+1,Z+0), (X+0,Y+1,Z+1), (X+0,Y+0,Z+1)
+						tri_type01 = true
+						#if this is an even-numbered slice
+						if vox_y % 2 == 0:
+							#if this is an odd-numbered row
+							if vox_z % 2 != 0:
+								tri_type01 = false
+						else:
+							#this is an odd-numbered slice
+							#if this is an even-numbered row
+							if vox_z % 2 == 0:
+								tri_type01 = false
+						if edge_6 == 1:
+							if tri_type01:
+								if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int and voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+									#tri1
+									indices.append(voxel_indices[vox_y][vox_z][vox_x])
+									indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+									if voxel_indices[vox_y+1][vox_z+1][vox_x] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+							else:
+								if voxel_indices[vox_y+1][vox_z+1][vox_x] != placeholder_int:
+									if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+										#tri1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+									if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+
+						if edge_6 == -1:
+							if tri_type01:
+								if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+									if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+										#tri1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									if voxel_indices[vox_y+1][vox_z+1][vox_x] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+							else:
+								if voxel_indices[vox_y+1][vox_z+1][vox_x] != placeholder_int:
+									if voxel_indices[vox_y+1][vox_z][vox_x] != placeholder_int:
+										#tri1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z][vox_x])
+									if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y+1][vox_z+1][vox_x])
+
+						if edge_10 != placeholder_int:
+							#the vertex in this voxel will make a quad with the vertices in the following voxels: (X+1,Y+0,Z+0), (X+1,Y+0,Z+1), (X+0,Y+0,Z+1)... if they exist
+							tri_type01 = true
+							#even-numbered rows
+							if vox_z % 2 == 0:
+								#odd-numbered cells
+								if vox_x % 2 != 0:
+									tri_type01 = false
+							else:
+								#even-numbered cells
+								if vox_x % 2 == 0:
+									tri_type01 = false
+							
+							if edge_10 == 1:
+								#calculate which way the triangles should be wound for LODing purposes on quads facing in the Y+ direction
+								if tri_type01:
+									if voxel_indices[vox_y][vox_z+1][vox_x+1] != placeholder_int:
+										if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+											#tri1
+											indices.append(voxel_indices[vox_y][vox_z][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+											#tri2
+											indices.append(voxel_indices[vox_y][vox_z][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+								else:
+									if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int and voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+										#tri1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+									if voxel_indices[vox_y][vox_z+1][vox_x+1] != placeholder_int:
+										#tri2
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										
+							if edge_10 == -1:
+								if tri_type01:
+									if voxel_indices[vox_y][vox_z+1][vox_x+1] != placeholder_int:
+										if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int:
+											#tri1
+											indices.append(voxel_indices[vox_y][vox_z][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+										if voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+											#tri2
+											indices.append(voxel_indices[vox_y][vox_z][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+											indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+								else:
+									if voxel_indices[vox_y][vox_z+1][vox_x] != placeholder_int and voxel_indices[vox_y][vox_z][vox_x+1] != placeholder_int:
+										#tri1
+										indices.append(voxel_indices[vox_y][vox_z][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+										indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+										if voxel_indices[vox_y][vox_z+1][vox_x+1] != placeholder_int:
+											#tri2
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x])
+											indices.append(voxel_indices[vox_y][vox_z+1][vox_x+1])
+											indices.append(voxel_indices[vox_y][vox_z][vox_x+1])
+											
+	
+											
+#returns a vertical slice representing the 1th column of ones and zeroes
+func get_western_cube_verts():
+	var verts_array = []
+	for vert_y in range(0, chunk_cube_verts_size):
+		for vert_z in range(0, chunk_cube_verts_size):
+			verts_array.append(chunk_cube_verts[vert_y][vert_z][1])
+	return verts_array
+
+#returns a horizontal ribbon representing the 1th column of ones and zeroes in the 1th slice
+func get_western_cube_verts_down():
+	var verts_array = []
+	for vert_z in range(0, chunk_cube_verts_size):
+		verts_array.append(chunk_cube_verts[1][vert_z][1])
+	return verts_array
+	
+#returns a vertical slice representing the 1th row of ones and zeroes	
+func get_northern_cube_verts():
+	var verts_array = []
+	for vert_y in range(0, chunk_cube_verts_size):
+		for vert_x in range(0, chunk_cube_verts_size):
+			verts_array.append(chunk_cube_verts[vert_y][1][vert_x])
+	return verts_array
+
+#returns a horizontal ribbon representing the 1th row of the 1th slice in ones and zeroes
+func get_northern_cube_verts_down():
+	var verts_array = []
+	for vert_x in range(0, chunk_cube_verts_size):
+		verts_array.append(chunk_cube_verts[1][1][vert_x])
+	return verts_array
+
+#returns a vertical ribbon of verts in the 1th row and 1th column of each slice
+func get_northwestern_cube_verts():
+	var verts_array = []
+	for vert_y in range(0, chunk_cube_verts_size):
+		verts_array.append(chunk_cube_verts[vert_y][1][1])
+	return verts_array
+	
+# returns a single vertex at the Y1,Z1,X1 position in the cube_verts_array
+func get_northwestern_cube_verts_down():
+	return chunk_cube_verts[1][1][1]
+
+#returns a horizontal slice representing the 1th slice in ones and zeroes
+func get_bottom_verts():
+	var verts_array = []
+	for vert_z in range(0, chunk_cube_verts_size):
+		for vert_x in range(0, chunk_cube_verts_size):
+			verts_array.append(chunk_cube_verts[1][vert_z][vert_x])
+	return verts_array

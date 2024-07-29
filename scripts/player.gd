@@ -71,9 +71,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta):
 	
 	#print(camera.get_frustum())
-	if not Engine.is_editor_hint():
+	if !Engine.is_editor_hint():
 		if Input.is_action_just_pressed("enable_player_gravity"):
-			gravity = game_gravity
+			if gravity == 0.0:
+				gravity = game_gravity
+			else:
+				gravity = 0.0
 		
 		# Add the gravity.
 		if not is_on_floor():

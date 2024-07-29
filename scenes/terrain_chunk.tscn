@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3 uid="uid://djcrfqo4j2l2h"]
+
+[ext_resource type="Script" path="res://scripts/terrain_chunk.gd" id="1_dulfj"]
+[ext_resource type="Material" uid="uid://c341uh3nlrda1" path="res://materials/small_grid.material" id="2_xxpt2"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_qys84"]
+
+[node name="terrain_chunk" type="Node3D"]
+script = ExtResource("1_dulfj")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+
+[node name="test_cube" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_qys84")
+surface_material_override/0 = ExtResource("2_xxpt2")

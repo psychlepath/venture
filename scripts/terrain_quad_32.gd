@@ -11,7 +11,8 @@ class_name TerrainQuad32
 @onready var quad_strip_length : int = section_size / quad_size
 @onready var this_quad_x_pos : int = 0
 @onready var this_quad_z_pos : int = 0
-@onready var chunk_child_scene : PackedScene
+#@onready var chunk_child_scene : PackedScene = preload("res://scenes/terrain_chunk.tscn")
+@onready var chunk_child_scene = preload("res://scenes/terrain_chunk.tscn")
 
 
 var verts : PackedVector3Array = []
@@ -80,8 +81,8 @@ func init_quad(_section_data_path, _quad_x : int, _strip_z : int, _max_LOD_dist 
 	#if current_dir != dir_and_lod.x or current_lod != dir_and_lod.y:
 		#create_quad_mesh(dir_and_lod)
 
-func handle_excavation(excavator_pos : Vector3) -> void:
-	#if this quad is being excavated, convert its LOD0 to chunks
+func handle_excavation(_excavator_pos : Vector3) -> void:
+	#if this quad is being excavated for the first time, convert its LOD0 to chunks
 	#var excavated_chunk_pos : Vector3 = get_chunk_pos(excavator_pos)
 	if !has_voxels: 
 		has_voxels = true
@@ -95,17 +96,10 @@ func handle_excavation(excavator_pos : Vector3) -> void:
 		var highest_chunk_y : int = floor(quad_terr_heights[quad_terr_heights.size() - 1] / float(chunk_size)) + 1
 		var num_slices_in_y = highest_chunk_y - lowest_chunk_y
 		var chunks_in_quad_size : int = quad_size / chunk_size
-		var is_east_edge_chunk : bool = false
-		var is_south_edge_chunk : bool = false
+		
 		for chunk_y in range(0, num_slices_in_y):
 			for chunk_z in range(0, chunks_in_quad_size):
-				is_south_edge_chunk = false
-				if chunk_z == chunks_in_quad_size - 1:
-					is_south_edge_chunk = true			
 				for chunk_x in range(0, chunks_in_quad_size):
-					is_east_edge_chunk = false
-					if chunk_x == chunks_in_quad_size - 1:
-						is_east_edge_chunk = true
 					var chunk_surface_verts = []
 					for chunk_verts_z in range(0, chunk_size + 1):
 						for chunk_verts_x in range(0, chunk_size + 1):
@@ -123,34 +117,30 @@ func handle_excavation(excavator_pos : Vector3) -> void:
 					var top_of_chunk : float = bottom_of_chunk + float(chunk_size)
 					if chunk_surf_verts_sorted[0].y > top_of_chunk: #TODO: should this be chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1] ??????
 						continue #chunk is below the surface, no need to instantiate it
-					#instantiate a terrain chunk at x and z offsets with a suitable y offset to represent the 
-					#heights of the terrain mesh at this location
-					var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
-					chunk_parent.add_child(new_chunk)
-					var chunk_pos = Vector3(self.global_position.x + float(chunk_x), float(bottom_of_chunk), self.global_positiion.z + float(chunk_z))
-					new_chunk.init_chunk(chunk_pos, is_east_edge_chunk, is_south_edge_chunk, quad_x, strip_z)
-					chunks_positions.append(chunk_pos)
+					else:
+						#instantiate a terrain chunk at x and z offsets with a suitable y offset to represent the 
+						#heights of the terrain mesh at this location
+						var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
+						#var new_chunk = chunk_child_scene.instantiate()
+						chunk_parent.add_child(new_chunk)
+						var chunk_pos = Vector3(self.global_position.x + float(chunk_x * chunk_size), float(bottom_of_chunk), self.global_position.z + float(chunk_z * chunk_size))
+						#new_chunk.init_chunk(chunk_pos, quad_x, strip_z)
+						new_chunk.init_chunk(chunk_pos)
+						chunks_positions.append(chunk_pos)
 		
-		#once the chunks have been initialised, do another pass that updates and creates the mesh and collider of each chunk			
-		for chunk in range(0, chunk_parent.get_children().size()):
-			chunk_parent.get_child(chunk).update_chunk_cube_verts()
-		#TODO: hide/disable the quad's mesh and collision
-		
+		var num_chunks = chunk_parent.get_children().size()
+		if num_chunks > 0:
+			#once the chunks have been initialised, do another pass that updates and creates the mesh and collider of each chunk			
+			for chnk in range(0, num_chunks):
+				chunk_parent.get_child(chnk).update_initial_chunk_heights()
+			#hide/disable the quad's mesh and collision
+			disable_and_hide_node(mesh_inst)
+			disable_and_hide_node($StaticBody3D)
+		else:
+			#show/enable the quad's mesh and collision
+			enable_and_show_node(mesh_inst)
+			enable_and_show_node($StaticBody3D)
 	
-		
-	
-		
-#func get_chunk_pos(excavator_pos : Vector3) -> Vector3:
-	#var chunk_pos_x : float = excavator_pos.x - (float(this_quad_x_pos) * float(quad_size))
-	#var x_dist = fmod(chunk_pos_x, float(GlblScrpt.chunk_size))
-	#chunk_pos_x = chunk_pos_x - x_dist
-	#var dist_y : float = fmod(excavator_pos.y, float(GlblScrpt.chunk_size))
-	#var chunk_pos_y : float = excavator_pos.y - dist_y
-	#var chunk_pos_z : float = excavator_pos.z - (float(this_quad_z_pos) * float(quad_size))
-	#var dist_z = fmod(chunk_pos_z, float(GlblScrpt.chunk_size))
-	#chunk_pos_z = chunk_pos_z - dist_z
-	#return Vector3(chunk_pos_x, chunk_pos_y, chunk_pos_z)
-
 func check_dir_and_LOD(player_quad_pos: Vector2i):
 	var new_dir = null
 	var new_lod = null
@@ -159,7 +149,6 @@ func check_dir_and_LOD(player_quad_pos: Vector2i):
 	var dist_z_from_player_quad : int = abs(player_quad_pos.y - this_quad_z_pos)
 	#new_lod = abs(dist_z_from_player_quad) / 2
 	#this quad is further to the East or West than it is North or South of the player
-	var lod_sorted : bool = false
 	if dist_z_from_player_quad < dist_x_from_player_quad:
 		match dist_x_from_player_quad:
 			0:
@@ -476,7 +465,7 @@ func create_quad_mesh(dir_and_lod : Vector2i):
 		#98 / 33 = 2z, leaving 32x
 		var vert_x_in_quad : float = vert_selection[sel_vert] - (vert_z_in_quad * float(quad_size + 1))
 		var z_distance_into_array : int = floor(vert_selection[sel_vert] / float(quad_size + 1)) * (section_size + 1) + starting_z
-		var vert_y_in_array : int = z_distance_into_array + starting_x + vert_x_in_quad
+		var vert_y_in_array : int = z_distance_into_array + starting_x + int(vert_x_in_quad)
 		var vert_y : float = resource_file.height_data[vert_y_in_array]
 		
 		match current_dir:
@@ -618,5 +607,16 @@ func get_chunk_at_position(_chunk_pos : Vector3):
 			if chunks_positions[pos].y == _chunk_pos.y:
 				if chunks_positions[pos].x == _chunk_pos.x:
 					if chunks_positions[pos].z == _chunk_pos.z:
-						chunk = self.get_child(pos)
+						chunk = chunk_parent.get_child(pos)
 	return chunk
+	
+	
+func disable_and_hide_node(node:Node) -> void:
+	#node.process_mode = 4 # = Mode: Disabled
+	node.process_mode = Node.PROCESS_MODE_DISABLED
+	node.hide()
+
+func enable_and_show_node(node:Node) -> void:
+	#node.process_mode = 0 # = Mode: Inherit
+	node.process_mode = Node.PROCESS_MODE_INHERIT
+	node.show()
