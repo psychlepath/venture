@@ -8,7 +8,7 @@ class_name TerrainQuad32
 @onready var quad_size : int = GlblScrpt.quad_size
 @onready var section_size : int = GlblScrpt.terrain_section_size
 @onready var chunk_size : int = GlblScrpt.chunk_size
-@onready var quad_strip_length : int = section_size / quad_size
+@onready var quad_strip_length : int = floor(section_size / quad_size)
 @onready var this_quad_x_pos : int = 0
 @onready var this_quad_z_pos : int = 0
 #@onready var chunk_child_scene : PackedScene = preload("res://scenes/terrain_chunk.tscn")
@@ -95,7 +95,7 @@ func handle_excavation(_excavator_pos : Vector3) -> void:
 		var lowest_chunk_y : int = floor(quad_terr_heights[0] / float(chunk_size))
 		var highest_chunk_y : int = floor(quad_terr_heights[quad_terr_heights.size() - 1] / float(chunk_size)) + 1
 		var num_slices_in_y = highest_chunk_y - lowest_chunk_y
-		var chunks_in_quad_size : int = quad_size / chunk_size
+		var chunks_in_quad_size : int = floor(quad_size / chunk_size)
 		
 		for chunk_y in range(0, num_slices_in_y):
 			for chunk_z in range(0, chunks_in_quad_size):
