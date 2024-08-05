@@ -77,16 +77,19 @@ func create_section_heights():
 	#get the image file name from the resource file
 	var heightmap_file_name = resource_file_name + ".exr"
 	var file_path = "res://terrain/heightmaps/" + heightmap_file_name
+	#TODO: remove the below debug line
+	file_path = "res://terrain/heightmaps/heightmap_513_test.exr"
 	var heightmap_image : Image = load(file_path)
 	#var heightmap_bytes = heightmap_image.get_data()
 	section_data.height_data.clear()
 	#print("heights array length: ",  str(section_data.height_data.size()))
 	#section_data.height_data = heightmap_bytes.to_int32_array()
 	heightmap_image.convert(Image.FORMAT_RF)#convert the red channel to float values
-	#TODO: the heightmap stores data ini the range of 0.0 to 1.0.
+	#TODO: the heightmap stores data in the range of 0.0 to 1.0.
 	# this allows for an altitude range of more than just 0.0 to 255.0 metres...
 	#section_data.height_data = heightmap_image.get_data().to_float32_array()
 	var heights_array = heightmap_image.get_data().to_float32_array()
+	section_data.height_data.clear()
 	for h in range(0, heights_array.size()):
 		#section_data.height_data.append(heights_array[h] * GlblScrpt.terrain_height_scale)
 		#snappedf(3.14159, 0.1) trim floats to a single decimal point

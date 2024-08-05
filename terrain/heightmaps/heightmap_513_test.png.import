@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://bfxmmmo7ubwcw"
+path="res://.godot/imported/heightmap_513_test.png-f0d348248482184238b395cba861b05a.image"
+
+[deps]
+
+source_file="res://terrain/heightmaps/heightmap_513_test.png"
+dest_files=["res://.godot/imported/heightmap_513_test.png-f0d348248482184238b395cba861b05a.image"]
+
+[params]
+

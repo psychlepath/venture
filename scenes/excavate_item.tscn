@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scripts/excavate_item.gd" id="1_r3k56"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_dhqbx"]
+radius = 1.0
 
 [sub_resource type="SphereMesh" id="SphereMesh_taepi"]
 
@@ -18,6 +19,7 @@ input_ray_pickable = false
 shape = SubResource("SphereShape3D_dhqbx")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+visible = false
 mesh = SubResource("SphereMesh_taepi")
 
 [connection signal="body_entered" from="Area3D" to="." method="_on_area_3d_body_entered"]

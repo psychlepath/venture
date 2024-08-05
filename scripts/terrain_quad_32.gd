@@ -97,42 +97,51 @@ func handle_excavation(_excavator_pos : Vector3) -> void:
 		var num_slices_in_y = highest_chunk_y - lowest_chunk_y
 		var chunks_in_quad_size : int = floor(quad_size / chunk_size)
 		
+		#for chunk_y in range(0, num_slices_in_y):
+			#for chunk_z in range(0, chunks_in_quad_size):
+				#for chunk_x in range(0, chunks_in_quad_size):
+					#var chunk_surface_verts = []
+					#for chunk_verts_z in range(0, chunk_size + 1):
+						#for chunk_verts_x in range(0, chunk_size + 1):
+							#var chunk_vert_index_z = (chunk_z * (quad_size + 1) * chunk_size) + (chunk_verts_z * quad_size + 1)
+							##TODO: guard against going out of bounds on the quad's verts array
+							#var chunk_vert_index_x = (chunk_x * chunk_size) + chunk_verts_x 
+							#var chunk_vert_index = chunk_vert_index_z + chunk_vert_index_x
+							#chunk_surface_verts.append(verts[chunk_vert_index])
+					#var chunk_surf_verts_sorted = chunk_surface_verts.duplicate(true)
+					#chunk_surf_verts_sorted.sort()
+					##test to see whether the highest height of the current terrain vertices is below the chunk
+					#var bottom_of_chunk : float = float((lowest_chunk_y * chunk_size) + (chunk_y * chunk_size)) #TODO: check whether this should be chunk_size + 1...
+					#if chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1].y < bottom_of_chunk:
+						#continue #chunk is in the air above the surface, no need to instantiate it 
+					#var top_of_chunk : float = bottom_of_chunk + float(chunk_size)
+					#if chunk_surf_verts_sorted[0].y > top_of_chunk: #TODO: should this be chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1] ??????
+						#continue #chunk is below the surface, no need to instantiate it
+					#else:
+						##instantiate a terrain chunk at x and z offsets with a suitable y offset to represent the 
+						##heights of the terrain mesh at this location
+						#var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
+						##var new_chunk = chunk_child_scene.instantiate()
+						#chunk_parent.add_child(new_chunk)
+						#var chunk_pos = Vector3(self.global_position.x + float(chunk_x * chunk_size), float(bottom_of_chunk), self.global_position.z + float(chunk_z * chunk_size))
+						##new_chunk.init_chunk(chunk_pos, quad_x, strip_z)
+						#new_chunk.init_chunk(chunk_pos, true)
+						#chunks_positions.append(chunk_pos)
 		for chunk_y in range(0, num_slices_in_y):
 			for chunk_z in range(0, chunks_in_quad_size):
 				for chunk_x in range(0, chunks_in_quad_size):
-					var chunk_surface_verts = []
-					for chunk_verts_z in range(0, chunk_size + 1):
-						for chunk_verts_x in range(0, chunk_size + 1):
-							var chunk_vert_index_z = (chunk_z * (quad_size + 1) * chunk_size) + (chunk_verts_z * quad_size + 1)
-							#TODO: guard against going out of bounds on the quad's verts array
-							var chunk_vert_index_x = (chunk_x * chunk_size) + chunk_verts_x 
-							var chunk_vert_index = chunk_vert_index_z + chunk_vert_index_x
-							chunk_surface_verts.append(verts[chunk_vert_index])
-					var chunk_surf_verts_sorted = chunk_surface_verts.duplicate(true)
-					chunk_surf_verts_sorted.sort()
-					#test to see whether the highest height of the current terrain vertices is below the chunk
-					var bottom_of_chunk : float = float((lowest_chunk_y * chunk_size) + (chunk_y * chunk_size)) #TODO: check whether this should be chunk_size + 1...
-					if chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1].y < bottom_of_chunk:
-						continue #chunk is in the air above the surface, no need to instantiate it 
-					var top_of_chunk : float = bottom_of_chunk + float(chunk_size)
-					if chunk_surf_verts_sorted[0].y > top_of_chunk: #TODO: should this be chunk_surf_verts_sorted[chunk_surf_verts_sorted.size() - 1] ??????
-						continue #chunk is below the surface, no need to instantiate it
-					else:
-						#instantiate a terrain chunk at x and z offsets with a suitable y offset to represent the 
-						#heights of the terrain mesh at this location
-						var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
-						#var new_chunk = chunk_child_scene.instantiate()
-						chunk_parent.add_child(new_chunk)
-						var chunk_pos = Vector3(self.global_position.x + float(chunk_x * chunk_size), float(bottom_of_chunk), self.global_position.z + float(chunk_z * chunk_size))
-						#new_chunk.init_chunk(chunk_pos, quad_x, strip_z)
-						new_chunk.init_chunk(chunk_pos)
-						chunks_positions.append(chunk_pos)
-		
+					var new_chunk : TerrainChunk = chunk_child_scene.instantiate()
+					chunk_parent.add_child(new_chunk)
+					var chunk_pos = Vector3(self.global_position.x + float(chunk_x * chunk_size), (lowest_chunk_y * chunk_size) + float(chunk_y * chunk_size), self.global_position.z + float(chunk_z * chunk_size))
+					new_chunk.init_chunk(chunk_pos, true)
+					chunks_positions.append(chunk_pos)
+					
+					
 		var num_chunks = chunk_parent.get_children().size()
 		if num_chunks > 0:
-			#once the chunks have been initialised, do another pass that updates and creates the mesh and collider of each chunk			
-			for chnk in range(0, num_chunks):
-				chunk_parent.get_child(chnk).update_initial_chunk_heights()
+			##once the chunks have been initialised, do another pass that updates and creates the mesh and collider of each chunk			
+			#for chnk in range(0, num_chunks):
+				#chunk_parent.get_child(chnk).generate_mesh()
 			#hide/disable the quad's mesh and collision
 			disable_and_hide_node(mesh_inst)
 			disable_and_hide_node($StaticBody3D)

@@ -8,29 +8,42 @@ class_name TerrainChunk
 @onready var terrain_section_size : float = float(GlblScrpt.terrain_section_size)
 var a_mesh : ArrayMesh
 var coll_shape_shape : ConcavePolygonShape3D
-var isosurface : float = 0.0
-var num_verts : int = 0 #TODO: remember to reset this to zero before updating the mesh
+var isosurface : float = 0.01
 var verts : PackedVector3Array = []
 var uvs : PackedVector2Array = []
 var indices : PackedInt32Array = []
-var triangle_order = [0, 1, 2]#default winding order of a tri's vertices
-var voxels = []
-
-#var heights = [] #this might not be necessary...
+var voxel_grid
+var is_surface_chunk : bool = false
 var chunk_pos : Vector3 = Vector3(0.0, 0.0, 0.0)
-var terrain_mat : ShaderMaterial
+var terrain_section_mat : ShaderMaterial
 var terrain_section_index : int
 #handle to resource files containing height and material data for this chunk's terrain section
 var parent_resource_filename : String = ""
 #handle to the parent quad of this chunk
 var parent_quad = null
 
-func init_chunk(_chunk_pos : Vector3):
+class VoxelGrid:
+	var data: PackedFloat32Array
+	var resolution: int
+	
+	func _init(_resolution: int):
+		self.resolution = _resolution
+		self.data.resize(resolution*resolution*resolution)
+		self.data.fill(1.0)
+	
+	func read(x: int, y: int, z: int):
+		return self.data[x + self.resolution * (y + self.resolution * z)]
+	
+	func write(x: int, y: int, z: int, value: float):
+		self.data[x + self.resolution * (y + self.resolution * z)] = value
+
+func init_chunk(_chunk_pos : Vector3, _is_surface_chunk : bool):
+	voxel_grid = VoxelGrid.new(chunk_size + 1)
 	coll_shape_shape = ConcavePolygonShape3D.new()
 	coll_shape.shape = coll_shape_shape
 	chunk_pos = _chunk_pos
 	self.global_position = chunk_pos
-	voxels.resize((chunk_size + 1) * (chunk_size + 1) * (chunk_size + 1))
+	is_surface_chunk = _is_surface_chunk
 	#calculate which terrain section the chunk is in
 	terrain_section_index = get_terr_section_index(chunk_pos)
 	parent_quad = get_quad(chunk_pos, terrain_section_index)
@@ -42,13 +55,29 @@ func init_chunk(_chunk_pos : Vector3):
 	#TODO: assign the correct material to match this chunk's parent quad and terrain section
 	#TODO: also allow for setting of a triplanar material for excavated areas
 	#possibly a second shadermaterial in the section's resource file?
-	terrain_mat = parent_resource_file.section_mat
+	terrain_section_mat = parent_resource_file.section_mat
 	get_initial_heights(parent_resource_file.height_data)
 	generate_mesh()
 
+func get_initial_heights(height_data) -> void:
+	var chunk_x_in_terrain_section = fmod(chunk_pos.x, terrain_section_size)
+	var chunk_z_in_terrain_section = fmod(chunk_pos.z, terrain_section_size)
+	# make sure that minus values in the x and z axes read from the correct part of the heights array...
+	if chunk_z_in_terrain_section < 0.0:
+		chunk_z_in_terrain_section = chunk_z_in_terrain_section + terrain_section_size
+	if chunk_x_in_terrain_section < 0.0:
+		chunk_x_in_terrain_section = chunk_x_in_terrain_section + terrain_section_size
+	#for x in range(1, voxel_grid.resolution-1):
+	for x in range(0, voxel_grid.resolution):
+		#for y in range(1, voxel_grid.resolution-1):
+		for y in range(0, voxel_grid.resolution):
+			#for z in range(1, voxel_grid.resolution-1):
+			for z in range(0, voxel_grid.resolution):
+				var z_in_heights : int = int((chunk_z_in_terrain_section + float(z)) * (terrain_section_size + 1))
+				var x_in_heights : int = int(chunk_x_in_terrain_section + float(x))
+				if self.global_position.y + float(y) <= height_data[z_in_heights + x_in_heights]:
+					voxel_grid.write(x, y, z, -1.0)
 
-					
-	
 func get_terr_section_index(_chunk_pos : Vector3) -> int:
 	var current_index = -1
 	var terr_section_x = floor(_chunk_pos.x / float(GlblScrpt.terrain_section_size))
@@ -86,110 +115,87 @@ func get_section_resource_filename(_chunk_pos : Vector3) -> String:
 		z_string = "z0" + str(terr_sect_z)
 	return x_string + z_string
 	
-#populate the voxels array with ones (solid/under the surface) and minus ones (air / outside the surface).	
-func get_initial_heights(height_data) -> void:
-	var chunk_x_in_terrain_heights = fmod(chunk_pos.x, terrain_section_size)
-	var chunk_z_in_terrain_heights = fmod(chunk_pos.z, terrain_section_size)
-	for vert_y in range(0, chunk_size + 1):
-		for vert_z in range(0, chunk_size + 1):
-			for vert_x in range(0, chunk_size + 1):
-				var current_height_index = (chunk_z_in_terrain_heights * (terrain_section_size + 1)) + chunk_x_in_terrain_heights
-				if chunk_pos.y + vert_y < height_data[current_height_index]:
-					voxels[vert_y][vert_z][vert_x] = 1.0
-				else:
-					voxels[vert_y][vert_z][vert_x] = -1.0	
-	
 func generate_mesh() -> void:
 	#clear out the mesh generation arrays
-	num_verts = 0
 	verts.clear()
 	uvs.clear()
 	indices.clear()
-	var cube = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-	#set the triangulation order
-	if (isosurface > 0.0):
-		triangle_order[0] = 2
-		triangle_order[1] = 1
-		triangle_order[2] = 0
-	else:
-		triangle_order[0] = 0
-		triangle_order[1] = 1
-		triangle_order[2] = 2
-	for cube_y in range(0, chunk_size):
-		for cube_z in range(0, chunk_size):
-			for cube_x in range(0, chunk_size):
-				for v in range(0, cube.size()):
-					#populates each vertex of the cube with either a 1.0 or a -1.0
-					#TODO: maybe the below should be chunk_size instead of chunk_size + 1?
-					var cube_vert_y = (cube_y + GlblScrpt.cube_vert_offsets[v].y) * (chunk_size + 1) * (chunk_size + 1)
-					var cube_vert_z = (cube_z + GlblScrpt.cube_vert_offsets[v].z) * (chunk_size + 1)
-					var cube_vert_x = cube_x + GlblScrpt.cube_vert_offsets[v].x
-					var cube_vert = cube_vert_y + cube_vert_z + cube_vert_x
-					if cube_vert != null and cube_vert != NAN:
-						cube[v] = cube_vert
-					else:
-						print("cube vert not found in voxels array")
-					march_cube(cube, cube_y, cube_z, cube_x)
-		
-func march_cube(cube, cube_y, cube_z, cube_x) -> void:
-	#create an int that will serve as a hexadecimal mask for comparison with the CubeEdgeFlags array defined in terrain_globals singleton
-	var vert_mask = 0
-	#Find which of the cube's 8 vertices are inside of the surface and which are outside
-	for i in range(0, cube.size()):
-		#First
-		#Left shift bitwise operator << is equivalent to multiplying the first operand by 2 raised to the power of the second operand
-		# a<<b is the same as a(2^b)
-		#Second
-		#Bitwise "OR" assignment operator |= functions by ORing the bits of the left operand and right operand and assigning the result to the left operand
-		#In effect, if the result of the left shift operation is less than the VertexMask, Cube[i] is assigned the VertexMask.
-		#Otherwise, Cube[i] is assigned (VertexMask plus (1 << i))
-		if (cube[i] <= isosurface):
-			vert_mask |= 1 << i
-	var edge_mask = GlblScrpt.cube_edge_flags[vert_mask]
-	#if none of the edges are intersected by the isosurface, no need to draw this voxel
-	if (edge_mask == 0):
-		return
-	#an array to hold the vertex positions on the edges of the cube. These verts will be used to create up to 5 triangles inside the cube
-	var edge_verts = [
-		Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), 
-		Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), 
-		Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0)
-	]
+	for x in voxel_grid.resolution-1:
+		for y in voxel_grid.resolution-1:
+			for z in voxel_grid.resolution-1:
+				march_cube(x, y, z)
+	#draw
+	var surface_tool = SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	#if verts.size() == 0:
+		#print("no vertices created.")
+	for vert in verts:
+		surface_tool.add_vertex(vert)
 	
-	for ev in range(0, edge_verts.size()):
-		#First calculate 1 * (2^ev)
-		#Second, compare the bits of edge_mask and the result of the first calculation using the bitwise AND operator.
-		#This comparison returns a 1 bit only if both of the bits being compared are 1, otherwise it returns a 0
-		if ((edge_mask & 1 << ev) != 0):
-			var offset : float = get_interpolated_offset(cube[GlblScrpt.edge_connection[ev][0]], cube[GlblScrpt.edge_connection[ev][1]])
-			edge_verts[ev].x = cube_x + (GlblScrpt.cube_vert_offsets[GlblScrpt.edge_connection[ev][0]][0] + offset * GlblScrpt.edge_direction[ev][0])
-			edge_verts[ev].y = cube_y + (GlblScrpt.cube_vert_offsets[GlblScrpt.edge_connection[ev][0]][1] + offset * GlblScrpt.edge_direction[ev][1])
-			edge_verts[ev].z = cube_z + (GlblScrpt.cube_vert_offsets[GlblScrpt.edge_connection[ev][0]][2] + offset * GlblScrpt.edge_direction[ev][2])
-			
-	#Save the triangles that describe the isosurface inside the voxel, maximum 5 triangles
-	for edge in range(5):
-		#In the triangle connection table, the triangles are described by sets of three edges intersected by the isosurface
-		#"3 * edge" is used to iterate over them
-		#-1 is used to mark the end of the list of triangles in a given row.
-		if (GlblScrpt.tri_connection_table[vert_mask][3 * edge] < 0):
-			break
-		var vert_0 = edge_verts[GlblScrpt.tri_connection_table[vert_mask][3 * edge]]
-		var vert_1 = edge_verts[GlblScrpt.tri_connection_table[vert_mask][3 * edge + 1]]
-		var vert_2 = edge_verts[GlblScrpt.tri_connection_table[vert_mask][3 * edge + 2]]
-		#add the three vertices to the verts array for the SurfaceTool
-		verts.append(vert_0)
-		verts.append(vert_1)
-		verts.append(vert_2)
-		#add the correct indices to the indices array
-		indices.append(num_verts + triangle_order[0])
-		indices.append(num_verts + triangle_order[1])
-		indices.append(num_verts + triangle_order[2])
-		
-		num_verts = num_verts + 3
+	surface_tool.generate_normals()
+	surface_tool.index()
+	surface_tool.set_material(terrain_section_mat)
+	a_mesh = ArrayMesh.new()
+	surface_tool.commit(a_mesh)
+	#if mesh_inst == null:
+		#print("mesh instance not found: ")
+		#return
+	mesh_inst.mesh = a_mesh
+	coll_shape_shape.set_faces(a_mesh.get_faces())
 
-func get_interpolated_offset(v0 : float, v1 : float) -> float:
-	#smoothing of the mesh by interpolating along each edge to find where the isosurface intersects it
-	var loc_delta : float = v1 - v0
-	if loc_delta == 0.0:
-		return isosurface
-	return (isosurface - v0) / loc_delta
+func march_cube(x:int, y:int, z:int):
+	var tri = get_triangulation(x, y, z)
+	for edge_index in tri:
+		if edge_index < 0: break
+		var point_indices = GlblScrpt.EDGES[edge_index]
+		var p0 = GlblScrpt.POINTS[point_indices.x]
+		var p1 = GlblScrpt.POINTS[point_indices.y]
+		var pos_a = Vector3(x+p0.x, y+p0.y, z+p0.z)
+		var pos_b = Vector3(x+p1.x, y+p1.y, z+p1.z)
+		var vert_position = calculate_interpolation(pos_a, pos_b)
+		verts.append(vert_position)	
+	
+func get_triangulation(x:int, y:int, z:int):
+	var idx = 0b00000000
+	idx |= int(voxel_grid.read(x, y, z) < isosurface)<<0
+	idx |= int(voxel_grid.read(x, y, z+1) < isosurface)<<1
+	idx |= int(voxel_grid.read(x+1, y, z+1) < isosurface)<<2
+	idx |= int(voxel_grid.read(x+1, y, z) < isosurface)<<3
+	idx |= int(voxel_grid.read(x, y+1, z) < isosurface)<<4
+	idx |= int(voxel_grid.read(x, y+1, z+1) < isosurface)<<5
+	idx |= int(voxel_grid.read(x+1, y+1, z+1) < isosurface)<<6
+	idx |= int(voxel_grid.read(x+1, y+1, z) < isosurface)<<7
+	return GlblScrpt.TRIANGULATIONS[idx]
+
+func calculate_interpolation(a:Vector3, b:Vector3):
+	var val_a = voxel_grid.read(a.x, a.y, a.z)
+	var val_b = voxel_grid.read(b.x, b.y, b.z)
+	var t = (isosurface - val_a)/(val_b-val_a)
+	return a+t*(b-a)
+
+func handle_excavation_sphere(sphere_pos : Vector3, radius : float):
+	#convert the sphere position to be relative to the chunk
+	var excav_local_pos : Vector3 = sphere_pos - self.global_position
+	#check each vert in nearby y slices of the voxel grid to see whether or not it is within radius distance of sphere_pos
+	var max_y = excav_local_pos.y + radius
+	if max_y > voxel_grid.resolution:
+		max_y = voxel_grid.resolution
+	var min_y = excav_local_pos.y - radius
+	if min_y < 0:
+		min_y = 0
+	for x in range(0, voxel_grid.resolution):
+		for y in range(min_y, max_y):
+			for z in range (voxel_grid.resolution):
+				if Vector3(x,y,z).distance_to(excav_local_pos) < radius:
+					#if it is, set that index of the voxel grid to 1.0
+					voxel_grid.write(x, y, z, 1.0)
+	generate_mesh()
+
+func handle_excavation_cubic(cube_pos : Vector3, width : float, height : float, depth: float):
+	pass
+	
+func handle_smoothing(top_left : Vector3, bottom_right : Vector3):
+	pass
+
+
+
