@@ -1,9 +1,9 @@
 [gd_scene load_steps=2 format=3 uid="uid://bbm0p4s67e1w1"]
 
-[ext_resource type="Script" path="res://scripts/terrain_quad_32.gd" id="1_0aqql"]
+[ext_resource type="Script" path="res://scripts/terrain_quad_32.gd" id="1_ho1hy"]
 
 [node name="terrain_quad" type="Node3D"]
-script = ExtResource("1_0aqql")
+script = ExtResource("1_ho1hy")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 
@@ -12,5 +12,3 @@ collision_layer = 257
 collision_mask = 3
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
-
-[node name="chunks" type="Node3D" parent="."]

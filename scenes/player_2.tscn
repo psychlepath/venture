@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://cp5ui50omqgqy"]
+
+[ext_resource type="Script" path="res://scripts/player2.gd" id="1_1r3as"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_ftg2q"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ny7om"]
+albedo_color = Color(0.854902, 0, 0.854902, 1)
+
+[node name="player2" type="Node3D"]
+script = ExtResource("1_1r3as")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_ftg2q")
+surface_material_override/0 = SubResource("StandardMaterial3D_ny7om")

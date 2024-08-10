@@ -8,7 +8,7 @@ class_name TerrainChunk
 @onready var terrain_section_size : float = float(GlblScrpt.terrain_section_size)
 var a_mesh : ArrayMesh
 var coll_shape_shape : ConcavePolygonShape3D
-var isosurface : float = 0.01
+var isosurface : float = 0.5
 var verts : PackedVector3Array = []
 var uvs : PackedVector2Array = []
 var indices : PackedInt32Array = []
@@ -129,12 +129,15 @@ func generate_mesh() -> void:
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	#if verts.size() == 0:
 		#print("no vertices created.")
-	for vert in verts:
-		surface_tool.add_vertex(vert)
-	
-	surface_tool.generate_normals()
-	surface_tool.index()
 	surface_tool.set_material(terrain_section_mat)
+	for vert in range(0, verts.size()):
+		surface_tool.set_uv(uvs[vert])
+		surface_tool.add_vertex(verts[vert])
+	#surface_tool.index()
+	for ind in range(0, indices.size()):
+		surface_tool.add_index(indices[ind])
+	surface_tool.generate_normals()
+	surface_tool.generate_tangents()
 	a_mesh = ArrayMesh.new()
 	surface_tool.commit(a_mesh)
 	#if mesh_inst == null:
@@ -153,8 +156,23 @@ func march_cube(x:int, y:int, z:int):
 		var pos_a = Vector3(x+p0.x, y+p0.y, z+p0.z)
 		var pos_b = Vector3(x+p1.x, y+p1.y, z+p1.z)
 		var vert_position = calculate_interpolation(pos_a, pos_b)
-		verts.append(vert_position)	
-	
+		#check that this is not a duplicate vertex
+		var already_in_verts : bool = false
+		for cv in range(0, verts.size()):
+			if vert_position.x == verts[cv].x:
+				if vert_position.y == verts[cv].y:
+					if vert_position.z == verts[cv].z:
+						already_in_verts = true
+						indices.append(cv)
+		if already_in_verts == false:
+			indices.append(verts.size())
+			verts.append(vert_position)
+			var uv_x = (fmod(chunk_pos.x, terrain_section_size) + float(x))/ terrain_section_size
+			var uv_y = (fmod(chunk_pos.z, terrain_section_size) + float(z))/ terrain_section_size
+			uvs.append(Vector2(uv_x, uv_y))
+			
+			
+		
 func get_triangulation(x:int, y:int, z:int):
 	var idx = 0b00000000
 	idx |= int(voxel_grid.read(x, y, z) < isosurface)<<0

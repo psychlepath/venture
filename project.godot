@@ -17,7 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GlblScrpt="*res://scripts/glbl_scrpt.gd"
+GlblScrpt="*res://scripts/GlblScrpt.gd"
 
 [input]
 

@@ -1,38 +1,39 @@
 @tool
 extends Node3D
 
-var regd_in_glbls : bool = false #check that the terrain manager variable in the global script points to this terrain manager
-@export var terrain_section_scene : PackedScene
-#@export var terrain_update_toggle : bool = false
 var updating_terrain : bool = false
-#var init_player_pos : Vector2 = Vector2(0.0, 0.0)
-#var player_tile_pos : Vector2 = Vector2(0.0, 0.0)
 var num_terrain_sections : int = 0
-#var current_children_positions = []
 var terrain_section_centres = []
 var active_sections = [] 
+var player = null
+var current_player_quad_pos : Vector2 = Vector2(0.0, 0.0)
+var quad_size = GlblScrpt.quad_size
 
 func _ready():
-	update_section_centres_array()
+	GlblScrpt.register_terrain_manager(self)
+	if self.get_child_count() > 0:
+		update_section_centres_array()
 
 func _process(_delta):
-	if !regd_in_glbls:
-		#Set the player variable in the singleton script for use with terrain rendering calculations etc
-		GlblScrpt.terrain_manager = self
-		if GlblScrpt.terrain_manager != null:
-			regd_in_glbls = true
-			# switch off process function once the check as to whether this node is registered
-			# in the global script returns true
-			self.set_process(false)
+	if player == null:
+		player = GlblScrpt.player
+	var new_player_pos : Vector2 = player.get_player_pos()
+	if floor(new_player_pos.x / float(quad_size)) != current_player_quad_pos.x:
+		current_player_quad_pos.x = floor(new_player_pos.x / float(quad_size))
+		current_player_quad_pos.y = floor(new_player_pos.y / float(quad_size))
+		update_terrain(new_player_pos)
+		return
+	if floor(new_player_pos.y / float(quad_size)) != current_player_quad_pos.y:
+		current_player_quad_pos.x = floor(new_player_pos.x / float(quad_size))
+		current_player_quad_pos.y = floor(new_player_pos.y / float(quad_size))
+		update_terrain(new_player_pos)
 
 func update_terrain(player_pos : Vector2):
-	#print(updating_terrain)
-	if !updating_terrain:
-		updating_terrain = true
-		#TODO: start thread here
-		active_sections.clear()
-		num_terrain_sections = get_child_count()
-		if num_terrain_sections > 0:
+	if !Engine.is_editor_hint():
+		if updating_terrain == false:
+			updating_terrain = true
+			#TODO: start thread here
+			active_sections.clear()
 			#remove any terrain sections outside of the visual range of the player
 			for sect in range(0, num_terrain_sections):
 				#var section_centre = Vector2(current_children_positions[sect].x + (GlblScrpt.terrain_section_size / 2), current_children_positions[sect].y + (GlblScrpt.terrain_section_size / 2))
@@ -46,9 +47,32 @@ func update_terrain(player_pos : Vector2):
 					active_sections.append(sect)
 			#print(active_sections.size())	
 			for terr_sect in range(0, active_sections.size()):
-				self.get_child(active_sections[terr_sect]).check_quads(player_pos)
-		#TODO: wait for thread to finish
-		updating_terrain = false
+				self.get_child(active_sections[terr_sect]).check_quads()
+			#TODO: wait for thread to finish
+			updating_terrain = false
+	if Engine.is_editor_hint():
+		num_terrain_sections = get_child_count()
+		if num_terrain_sections > 0:
+			if updating_terrain == false:
+				updating_terrain = true
+				#TODO: start thread here
+				active_sections.clear()
+				#remove any terrain sections outside of the visual range of the player
+				for sect in range(0, num_terrain_sections):
+					#var section_centre = Vector2(current_children_positions[sect].x + (GlblScrpt.terrain_section_size / 2), current_children_positions[sect].y + (GlblScrpt.terrain_section_size / 2))
+					#var section_centre = Vector2(self.get_child(sect).global_position.x + (float(GlblScrpt.terrain_section_size) / 2.0), self.get_child(sect).global_position.z + (float(GlblScrpt.terrain_section_size) / 2.0))
+					var dist_from_player = terrain_section_centres[sect].distance_to(Vector2(player_pos.x, player_pos.y))
+					if dist_from_player > GlblScrpt.terrain_view_range:
+						disable_and_hide_node(self.get_child(sect))
+					else:
+						enable_and_show_node(self.get_child(sect))
+						#keep track of which terrain sections are visible
+						active_sections.append(sect)
+				#print(active_sections.size())	
+				for terr_sect in range(0, active_sections.size()):
+					self.get_child(active_sections[terr_sect]).check_quads()
+				#TODO: wait for thread to finish
+				updating_terrain = false
 
 func disable_and_hide_node(node:Node) -> void:
 	#node.process_mode = 4 # = Mode: Disabled

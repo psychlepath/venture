@@ -20,24 +20,16 @@ var interact_item : Node3D = null
 @onready var mouse_u_d := $mouse_tracker_u_d
 @onready var raycast := $camera_pivot/Camera3D/RayCast3D
 
+
 #func _enter_tree():
 func _ready():
 	#if not Engine.is_editor_hint():
 	#Set the player variable in the singleton script for use with terrain rendering calculations etc
 	#GlblScrpt.player = self # doesn't work reliably in editor mode, so workaround is put in _process function
 	#Globals.current_camera = camera
+	GlblScrpt.register_player(self)
 	prev_camera_pivot_rot = $camera_pivot.rotation.x
 	prev_player_rot = rotation.y
-
-func _process(_delta):
-	if !regd_in_glbls:
-		#Set the player variable in the singleton script for use with terrain rendering calculations etc
-		GlblScrpt.player = self
-		if GlblScrpt.player != null:
-			regd_in_glbls = true
-			#switch off process (call from global script)?
-		else: 
-			print("player not registered")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not Engine.is_editor_hint():
@@ -122,9 +114,7 @@ func _physics_process(delta):
 				if interact_item != null:
 					interact_item.hide_outline()
 					interact_item = null
-					
-			
-					
+
 #called by interactable_item		
 func enable_raycast():
 	#print("enabling raycast")
@@ -139,3 +129,7 @@ func disable_raycast():
 	if interact_item != null:
 		interact_item.hide_outline()
 		interact_item = null
+
+
+func get_player_pos() -> Vector2:
+	return Vector2(self.global_position.x, self.global_position.z)
