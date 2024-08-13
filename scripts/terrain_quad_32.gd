@@ -5,6 +5,7 @@ class_name TerrainQuad32
 @onready var quad_size : int = GlblScrpt.quad_size
 @onready var section_size : int = GlblScrpt.terrain_section_size
 @onready var max_LOD_dist : int = GlblScrpt.max_LOD_dist_terrain
+var parent_section
 var mesh_inst : MeshInstance3D
 var coll_shape : CollisionShape3D
 var verts : PackedVector3Array = []
@@ -35,6 +36,7 @@ var checking_dir_and_lod : bool = false
 var handling_excavation : bool = false
 
 func init_quad(_quad_x : int, _quad_z : int):
+	parent_section = self.get_parent().get_parent()
 	quad_x_in_section = _quad_x
 	quad_z_in_section = _quad_z
 	quad_x_global = self.global_position.x
@@ -334,14 +336,14 @@ func generate_mesh():
 	#vert_selection now holds the index of each vert in sequential order, based on the density of verts in this quad (ie. the LOD)
 	#for example, at LOD0, the first row of vert_selection is 0,1,2,3... up to quad_size
 	#at LOD1, the first row of vert selection is 0,2,4,6... up to quad_size
-	resource_file = self.get_parent().get_parent().get_resource_file()
+	resource_file = parent_section.get_resource_file()
 	#if resource_file == null:
 		#print("could not get this section's resource file")
 		#return
 	#else:
 		#print("resource filename: " + resource_file.name)
 	for sel_vert in range(0, vert_selection.size()):
-		var vert_z_in_quad : int = vert_selection[sel_vert] / (quad_size + 1)
+		var vert_z_in_quad : int = int(vert_selection[sel_vert] / (quad_size + 1))
 		#32 / 33 = 0 (row Z), (with 0 to 32 in the X columns of row 0)
 		#33 / 33 = 1 (row Z), leaving 0 X
 		#64 / 33 = 1 (row Z), leaving 31 X
@@ -451,8 +453,8 @@ func generate_mesh():
 		#calculate the UVs of this vert, based on its location in the 512x512 grid
 		#TODO: figure out if the divisor should be section_size + 1.
 		#Unlikely, as the textures for the shader material need to be power of 2 for mipmapping purposes.
-		var uv_x : float = fmod(self.global_position.x + float(vert_x_in_quad), float(section_size)) / float(section_size)
-		var uv_y : float = fmod(self.global_position.z + float(vert_z_in_quad), float(section_size)) / float(section_size)
+		var uv_x : float = fmod(self.global_position.x + float(vert_x_in_quad), float(section_size + 1)) / float(section_size + 1)
+		var uv_y : float = fmod(self.global_position.z + float(vert_z_in_quad), float(section_size + 1)) / float(section_size + 1)
 		uvs.append(Vector2(uv_x, uv_y))
 	
 		
@@ -488,25 +490,23 @@ func handle_excavation(_excavator_pos : Vector3, _excavator_radius : float, _exc
 	handling_excavation = true
 	var verts_to_change = []
 	for vert in range(0, verts.size()):
-		if verts[vert].distance_to(_excavator_pos) < _excavator_radius:
+		var vert_global_pos : Vector3 = Vector3(quad_x_global, 0.0, quad_z_global) + verts[vert]
+		if vert_global_pos.distance_to(_excavator_pos) < _excavator_radius:
 			verts[vert].y = verts[vert].y - _excavator_influence
 			if verts[vert].y < 0.0:
 				verts[vert].y = 0.0
-	#update the height_data array in the resource file
-	update_heights_data(verts_to_change)
+			verts_to_change.append(vert_global_pos)
 	apply_mesh()
+	update_section_data(verts_to_change)
 	handling_excavation = false
 	
 func handle_filling(_filler_pos : Vector3) -> void:
 	pass
 
-func update_heights_data(vert_positions) -> void:
-	#TODO: check that the vert_pos is not relative to the quad
-	for vert in range(0, vert_positions.size()):
-		var vert_z_in_heights = fmod(vert_positions[vert].z, section_size) * section_size + 1
-		var vert_x_in_heights = fmod(vert_positions[vert].x, section_size)
-		resource_file.height_data[vert_z_in_heights + vert_x_in_heights] = vert_positions[vert].y
-	
+func update_section_data(vert_positions) -> void:
+	parent_section.update_section_heights(vert_positions)
+	parent_section.update_section_splatmap(vert_positions)
+
 func disable_and_hide_node(node:Node) -> void:
 	#node.process_mode = 4 # = Mode: Disabled
 	node.process_mode = Node.PROCESS_MODE_DISABLED

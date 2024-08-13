@@ -9,11 +9,11 @@ class_name TerrainSection
 @onready var quads_parent : Node3D = $quads_parent
 @onready var quad_size : int = GlblScrpt.quad_size
 @onready var section_size : int = GlblScrpt.terrain_section_size
-@onready var num_quads_in_section : int = section_size/quad_size
+@onready var num_quads_in_section : int = int(section_size/quad_size)
 @onready var section_pos : Vector2 = Vector2(self.global_position.x, self.global_position.z)
 @onready var max_LOD_dist : int = GlblScrpt.max_LOD_dist_terrain
 var terrain_manager
-
+var splatmap : ImageTexture
 var resource_file_name = ""
 # given the player position, use a series of 32x32 quads
 # to calculate which of the 512 x 512 vertices make up 
@@ -30,6 +30,8 @@ enum dirs {no_dir, N, NE, E, SE, S, SW, W, NW}
 # this terrain section's mesh
 var quads_created = false
 var checking_quads : bool = false
+var updating_heights : bool = false
+var updating_splatmap : bool = false
 
 
 func _process(_delta):
@@ -43,30 +45,33 @@ func _process(_delta):
 				return
 			if resource_file_name == "":
 				resource_file_name = section_data.resource_path.get_file().trim_suffix('.tres')
-			create_section_heights()
+			create_section_data()
 
 #editor only function? remove before shipping	
-func create_section_heights():
+func create_section_data():
 	#fill the resource file's 513x513 heights array from the heightmap
 	#get the image file name from the resource file
+	if resource_file_name == "":
+		resource_file_name = section_data.resource_path.get_file().trim_suffix('.tres')
 	var heightmap_file_name = resource_file_name + ".exr"
 	var file_path = "res://terrain/heightmaps/" + heightmap_file_name
 	var heightmap_image : Image = load(file_path)
-	#var heightmap_bytes = heightmap_image.get_data()
 	section_data.height_data.clear()
-	#print("heights array length: ",  str(section_data.height_data.size()))
-	#section_data.height_data = heightmap_bytes.to_int32_array()
 	heightmap_image.convert(Image.FORMAT_RF)#convert the red channel to float values
 	#TODO: the heightmap stores data in the range of 0.0 to 1.0.
 	# this allows for an altitude range of more than just 0.0 to 255.0 metres...
-	#section_data.height_data = heightmap_image.get_data().to_float32_array()
 	var heights_array = heightmap_image.get_data().to_float32_array()
 	for h in range(0, heights_array.size()):
-		#snappedf(3.14159, 0.1) trim floats to a single decimal point
-		#section_data.height_data.append(snappedf(heights_array[h] * GlblScrpt.terrain_height_scale, 0.1))
 		section_data.height_data.append(heights_array[h] * GlblScrpt.terrain_height_scale)
-	#print("heights array length: ",  str(section_data.height_data.size()))
 	section_data.section_mat = section_mat
+	var splatmap_file_name = resource_file_name + ".png"
+	file_path = "res://terrain/terrain_splatmaps/" + splatmap_file_name
+	var splatmap_image : Image = load(file_path)
+	section_data.splatmap_width = splatmap_image.get_width()
+	section_data.splatmap_height = splatmap_image.get_height()
+	section_data.splatmap_uses_mipmaps = splatmap_image.has_mipmaps()
+	section_data.splatmap_format = splatmap_image.get_format()
+	section_data.splatmap_data = splatmap_image.get_data()
 	ResourceSaver.save(section_data, section_data.get_path(), 0)
 	instantiate_quads()
 	
@@ -83,7 +88,8 @@ func check_quads():
 	if checking_quads == false:
 		checking_quads = true
 		if quads_created == false:
-			instantiate_quads()
+			create_section_data()
+		quads_created = true
 		#find the golbal coords of the quad in which the player is located
 		#var player_quad_x : float = floor(float(player_pos.x) / float(quad_size))
 		#var player_quad_z : float = floor(float(player_pos.y) / float(quad_size))
@@ -94,5 +100,37 @@ func check_quads():
 		checking_quads = false
 		
 func get_resource_file():
-	#var filepath = "res://terrain/" + resource_file_name + "/" + resource_file_name + ".tres"
 	return section_data
+
+#update the height_data array in the resource file
+#update the terrain splatmap to show the correct material at the location of the excavation
+func update_section_heights(vert_positions):
+	if updating_heights == true:
+		return
+	updating_heights = true
+	#TODO: check that the vertex positions are global and not relative to the quad
+	for vert in range(0, vert_positions.size()):
+		var vert_z_in_heights : int = fmod(vert_positions[vert].z, float(section_size + 1)) * float(section_size + 1)
+		var vert_x_in_heights : int = fmod(vert_positions[vert].x, float(section_size + 1))
+		section_data.height_data[vert_z_in_heights + vert_x_in_heights] = vert_positions[vert].y
+	#TODO: use ResourceSaver to make the changes persist
+	#ResourceSaver.save(section_data, section_data.get_path(), 0)
+	updating_heights = false
+
+func update_section_splatmap(vert_positions):
+	if updating_splatmap == true:
+		return
+	updating_splatmap = true
+	var splat_img : Image = Image.create_from_data(section_data.splatmap_width, section_data.splatmap_height, section_data.splatmap_uses_mipmaps, section_data.splatmap_format, section_data.splatmap_data)
+	for vert in range(0, vert_positions.size()):
+		#get the location of the vertex in the splatmap's 512x512 area
+		var vert_x_in_splatmap : int = (fmod(vert_positions[vert].x, float(section_size + 1)) / float(section_size + 1)) * float(section_size)
+		var vert_z_in_splatmap : int = (fmod(vert_positions[vert].z, float(section_size + 1)) / float(section_size + 1)) * float(section_size)
+		splat_img.set_pixel(vert_x_in_splatmap, vert_z_in_splatmap, Color.BLACK)
+	section_data.splatmap_data = splat_img.get_data()
+	#TODO: use ResourceSaver to make the changes persist
+	#ResourceSaver.save(section_data, section_data.get_path(), 0)
+	#RenderingServer.texture_set_data_partial(splatmap.get_rid(), splat_img, 0, 0, section_size, section_size, dst_x, dst_y, 0, 0)
+	var new_splatmap_image_texture = ImageTexture.create_from_image(splat_img)
+	section_mat.set_shader_parameter("splatmap", new_splatmap_image_texture)
+	updating_splatmap = false

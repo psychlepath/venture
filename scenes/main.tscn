@@ -38,4 +38,4 @@ section_data = ExtResource("4_l4y33")
 section_mat = ExtResource("5_p4iqb")
 
 [node name="player" parent="." instance=ExtResource("6_gheal")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 165.939, 47.854, 123.654)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 68.5715, 47.854, 83.1993)

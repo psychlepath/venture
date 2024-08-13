@@ -23,6 +23,8 @@ var interact_item : Node3D = null
 
 #func _enter_tree():
 func _ready():
+	#TODO: Debugging code. remove before shipping
+	RenderingServer.set_debug_generate_wireframes(true)
 	#if not Engine.is_editor_hint():
 	#Set the player variable in the singleton script for use with terrain rendering calculations etc
 	#GlblScrpt.player = self # doesn't work reliably in editor mode, so workaround is put in _process function
@@ -69,6 +71,12 @@ func _physics_process(delta):
 				gravity = game_gravity
 			else:
 				gravity = 0.0
+		
+		#TODO: Debugging code. Remove before shipping
+		if Input.is_key_pressed(KEY_P):
+			var vp = get_viewport()
+			vp.debug_draw = (vp.debug_draw + 1 ) % 5
+	
 		
 		# Add the gravity.
 		if not is_on_floor():
