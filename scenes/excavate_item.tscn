@@ -3,8 +3,11 @@
 [ext_resource type="Script" path="res://scripts/excavate_item.gd" id="1_r3k56"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_dhqbx"]
+radius = 0.25
 
 [sub_resource type="SphereMesh" id="SphereMesh_taepi"]
+radius = 0.25
+height = 0.5
 
 [node name="excavate_item" type="Node3D"]
 script = ExtResource("1_r3k56")
@@ -19,5 +22,8 @@ shape = SubResource("SphereShape3D_dhqbx")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_taepi")
+
+[node name="excavation_point" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.365821, 0)
 
 [connection signal="body_entered" from="Area3D" to="." method="_on_area_3d_body_entered"]

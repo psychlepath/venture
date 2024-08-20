@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://d0ptlf8k6u5ft"
+path="res://.godot/imported/vert_arrow_curve_icon.png-7d88fd411563b3612fc91d3236031e3f.image"
+
+[deps]
+
+source_file="res://textures/vert_arrow_curve_icon.png"
+dest_files=["res://.godot/imported/vert_arrow_curve_icon.png-7d88fd411563b3612fc91d3236031e3f.image"]
+
+[params]
+

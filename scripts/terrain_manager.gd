@@ -6,13 +6,20 @@ var num_terrain_sections : int = 0
 var terrain_section_centres = []
 var active_sections = [] 
 var player = null
-var current_player_quad_pos : Vector2 = Vector2(0.0, 0.0)
+var current_player_quad_pos : Vector2 = Vector2(-10.0, -10.0)
 var quad_size = GlblScrpt.quad_size
 
 func _ready():
 	GlblScrpt.register_terrain_manager(self)
-	if self.get_child_count() > 0:
-		update_section_centres_array()
+	num_terrain_sections = self.get_child_count()
+	if num_terrain_sections > 0:
+		terrain_section_centres.clear()
+		for sect in range(0, num_terrain_sections):
+			#populate the array that keeps track of the global x,z position of the centre of each terrain section
+			var section_centre = Vector2(self.get_child(sect).global_position.x + (float(GlblScrpt.terrain_section_size) / 2.0), self.get_child(sect).global_position.z + (float(GlblScrpt.terrain_section_size) / 2.0))
+			terrain_section_centres.append(section_centre)
+			self.get_child(sect).create_section_data()
+			
 
 func _process(_delta):
 	if player == null:
@@ -93,12 +100,10 @@ func get_terrain_section_index(section_centre_pos : Vector2) -> int:
 	return terr_sect_index
 
 func update_section_centres_array():
-	terrain_section_centres.clear()
-	num_terrain_sections = get_child_count()
+	num_terrain_sections = self.get_child_count()
 	if num_terrain_sections > 0:
+		terrain_section_centres.clear()
 		for sect in range(0, num_terrain_sections):
-			#populate the array that keeps track of the global x,z position of the centre of each terrain section
-			#var current_section = self.get_child(sect)
+			#update the array that keeps track of the global x,z position of the centre of each terrain section
 			var section_centre = Vector2(self.get_child(sect).global_position.x + (float(GlblScrpt.terrain_section_size) / 2.0), self.get_child(sect).global_position.z + (float(GlblScrpt.terrain_section_size) / 2.0))
 			terrain_section_centres.append(section_centre)
-			

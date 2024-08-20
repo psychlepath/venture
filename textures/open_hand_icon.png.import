@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cyld5slxpvefe"
+path="res://.godot/imported/open_hand_icon.png-8dc9694741089c722a737d4c05bbe4c8.image"
+
+[deps]
+
+source_file="res://textures/open_hand_icon.png"
+dest_files=["res://.godot/imported/open_hand_icon.png-8dc9694741089c722a737d4c05bbe4c8.image"]
+
+[params]
+

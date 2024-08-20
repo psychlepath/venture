@@ -19,6 +19,10 @@ config/icon="res://icon.svg"
 
 GlblScrpt="*res://scripts/GlblScrpt.gd"
 
+[display]
+
+window/size/always_on_top=true
+
 [input]
 
 interact={

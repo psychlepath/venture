@@ -1,0 +1,13 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqkieexeji05o"]
+
+[ext_resource type="Material" uid="uid://thcxxtcg1mjg" path="res://materials/interact_label.material" id="1_3douu"]
+[ext_resource type="Script" path="res://scripts/interact_label.gd" id="1_n1ply"]
+
+[sub_resource type="QuadMesh" id="QuadMesh_gn081"]
+size = Vector2(0.1, 0.1)
+
+[node name="interact_label" type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+mesh = SubResource("QuadMesh_gn081")
+surface_material_override/0 = ExtResource("1_3douu")
+script = ExtResource("1_n1ply")

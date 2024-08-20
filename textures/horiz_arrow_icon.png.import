@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://cu6w7kvgtid3i"
+path="res://.godot/imported/horiz_arrow_icon.png-4f1e0161ebbff980771fd594eb5d6d88.image"
+
+[deps]
+
+source_file="res://textures/horiz_arrow_icon.png"
+dest_files=["res://.godot/imported/horiz_arrow_icon.png-4f1e0161ebbff980771fd594eb5d6d88.image"]
+
+[params]
+

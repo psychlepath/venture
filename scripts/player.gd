@@ -12,7 +12,7 @@ var raycast_enabled : bool = false
 var mouse_down : bool = false
 var prev_camera_pivot_rot : float = 0.0
 var prev_player_rot : float = 0.0
-var interact_item : Node3D = null
+var interact_item = null
 @export var mouse_sensitivity : float = 0.01
 @onready var camera_pivot := $camera_pivot
 @onready var camera := $camera_pivot/Camera3D
@@ -53,6 +53,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					mouse_l_r.rotate_y(-event.relative.x * mouse_sensitivity)
 					mouse_u_d.rotate_x(-event.relative.y * mouse_sensitivity)
 					mouse_u_d.rotation.x = clamp(mouse_u_d.rotation.x, -0.75, 0.75)
+					
 					
 			elif event is InputEventMouseButton:
 				if event.get_button_index() == 1:
@@ -105,22 +106,23 @@ func _physics_process(delta):
 				#print("raycast is colliding")
 				#print(raycast.get_collider())
 				if raycast.get_collider().is_in_group("interactable"):
-					if interact_item != raycast.get_collider().get_parent():
-						interact_item = raycast.get_collider().get_parent()
+					#print("raycast colliding with interactable component")
+					#if interact_item != raycast.get_collider().get_parent():
+					if interact_item != raycast.get_collider():
+						interact_item = raycast.get_collider()
 						interact_item.set_initial_input(Vector2(mouse_u_d.rotation.x, mouse_l_r.rotation.y))
-						interact_item.show_outline()
 					if mouse_down:
 						#if the left mouse button is down, 
 						interact_item.handle_input(Vector2(mouse_u_d.rotation.x, mouse_l_r.rotation.y))
 						
 				else:
 					if interact_item != null:
-						interact_item.hide_outline()
+						hide_interact_icon()
 						interact_item = null
 						
 			else:
 				if interact_item != null:
-					interact_item.hide_outline()
+					hide_interact_icon()
 					interact_item = null
 
 #called by interactable_item		
@@ -135,9 +137,11 @@ func disable_raycast():
 	raycast_enabled = false
 	raycast.enabled = false
 	if interact_item != null:
-		interact_item.hide_outline()
+		hide_interact_icon()
 		interact_item = null
-
 
 func get_player_pos() -> Vector2:
 	return Vector2(self.global_position.x, self.global_position.z)
+
+func hide_interact_icon():
+	interact_item.remove_label()

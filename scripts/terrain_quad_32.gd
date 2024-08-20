@@ -16,6 +16,7 @@ var coll_shape_shape : ConcavePolygonShape3D
 var resource_file = null
 var quad_x_in_section : int = 0
 var quad_z_in_section : int = 0
+var quad_index_in_section : int = 0
 var quad_x_global : float = 0.0
 var quad_z_global : float = 0.0
 
@@ -33,12 +34,13 @@ var current_dir = null
 var current_lod = null
 var section_mat : ShaderMaterial
 var checking_dir_and_lod : bool = false
-var handling_excavation : bool = false
 
-func init_quad(_quad_x : int, _quad_z : int):
+
+func init_quad(_quad_x : int, _quad_z : int, _quad_idx):
 	parent_section = self.get_parent().get_parent()
 	quad_x_in_section = _quad_x
 	quad_z_in_section = _quad_z
+	quad_index_in_section = _quad_idx
 	quad_x_global = self.global_position.x
 	quad_z_global = self.global_position.z
 	#create the mesh and the collisionshape at init 
@@ -48,6 +50,7 @@ func init_quad(_quad_x : int, _quad_z : int):
 	coll_shape = $StaticBody3D/CollisionShape3D
 	mesh_inst = $MeshInstance3D
 	coll_shape.shape = coll_shape_shape
+	section_mat = parent_section.get_section_material()
 	check_dir_and_LOD()
 	
 
@@ -58,6 +61,10 @@ func init_quad(_quad_x : int, _quad_z : int):
 func check_dir_and_LOD():
 	if checking_dir_and_lod == false:
 		checking_dir_and_lod = true
+		#check that the player is ready
+		if GlblScrpt.player == null:
+			checking_dir_and_lod = false
+			return
 		var player_pos : Vector2 = GlblScrpt.player.get_player_pos()
 		var player_quad_pos : Vector2i = Vector2i(floor(player_pos.x / float(quad_size)) * float(quad_size), floor(player_pos.y / float(quad_size)) * quad_size)
 		var new_dir = null
@@ -456,12 +463,15 @@ func generate_mesh():
 		var uv_x : float = fmod(self.global_position.x + float(vert_x_in_quad), float(section_size + 1)) / float(section_size + 1)
 		var uv_y : float = fmod(self.global_position.z + float(vert_z_in_quad), float(section_size + 1)) / float(section_size + 1)
 		uvs.append(Vector2(uv_x, uv_y))
-	
+
+func set_LOD(_LOD):
+	current_lod = _LOD
 		
 func apply_mesh():
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_material(resource_file.section_mat)
+	#st.set_material(resource_file.section_mat)
+	st.set_material(section_mat)
 	#TODO: set smooth normals
 	#st.set_smooth_group(0)
 	if indices.size() == 0:
@@ -484,28 +494,15 @@ func apply_mesh():
 func handle_tunnelling():
 	pass
 	
-func handle_excavation(_excavator_pos : Vector3, _excavator_radius : float, _excavator_influence : float) -> void:
-	if handling_excavation:
-		return
-	handling_excavation = true
-	var verts_to_change = []
-	for vert in range(0, verts.size()):
-		var vert_global_pos : Vector3 = Vector3(quad_x_global, 0.0, quad_z_global) + verts[vert]
-		if vert_global_pos.distance_to(_excavator_pos) < _excavator_radius:
-			verts[vert].y = verts[vert].y - _excavator_influence
-			if verts[vert].y < 0.0:
-				verts[vert].y = 0.0
-			verts_to_change.append(vert_global_pos)
-	apply_mesh()
-	update_section_data(verts_to_change)
-	handling_excavation = false
+func handle_excavation(_excavator_pos : Vector3, _excavator_radius : float) -> void:
+	#call the handle_excavation funciton on the parent terrain section
+	parent_section.handle_excavation(_excavator_pos, _excavator_radius, true)
+
+
 	
 func handle_filling(_filler_pos : Vector3) -> void:
 	pass
 
-func update_section_data(vert_positions) -> void:
-	parent_section.update_section_heights(vert_positions)
-	parent_section.update_section_splatmap(vert_positions)
 
 func disable_and_hide_node(node:Node) -> void:
 	#node.process_mode = 4 # = Mode: Disabled

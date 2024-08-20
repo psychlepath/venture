@@ -2,15 +2,16 @@ extends Node3D
 
 class_name ExcavateItem
 
-@onready var detect_area : Area3D = $Area3D
-@export var excavation_radius : float = 2.0
-@export var influence : float = 0.75 #how much is taken from the excavated object
+@onready var excavation_point = $excavation_point
+#@onready var detect_area : Area3D = $Area3D
+@export var excavation_radius : float = 3.0
+
+#var digging_desirable : bool = false
 #this area has detected an intersection with another object on Layer 9
 func _on_area_3d_body_entered(body):
-	#var excavation_point : Vector3 = Vector3(detect_area.global_position.x, detect_area.global_position.y - excavation_radius, detect_area.global_position.z)
+	#if digging_desirable == false:
+		#return
 	if body.is_in_group("terrain_quads"):
 		#print("excavating quad mesh")
-		body.get_parent().handle_excavation(self.global_position, excavation_radius, influence)
-	
-func set_influence(_infl : float) -> void:
-	influence = _infl
+		body.get_parent().handle_excavation(excavation_point.global_position, excavation_radius)
+
